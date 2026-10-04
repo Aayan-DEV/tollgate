@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "published": "2026-10-03",
+  "signatures": [
+    {
+      "id": "SIG-001",
+      "name": "bank detail change lure",
+      "scopes": [
+        "tool_result",
+        "user"
+      ],
+      "action": "warn",
+      "pattern": "(?i)(bank (account|details) (has|have) changed|new (bank )?account|(previous|old) account is closed)",
+      "ref": "BEC fraud pattern; OWASP LLM01 indirect injection"
+    },
+    {
+      "id": "SIG-002",
+      "name": "instruction override",
+      "scopes": [
+        "tool_result",
+        "user"
+      ],
+      "action": "warn",
+      "pattern": "(?i)(ignore (all |any )?(previous|prior) instructions|disregard (the )?(above|previous))",
+      "ref": "OWASP LLM01"
+    },
+    {
+      "id": "SIG-003",
+      "name": "urgency and authority pressure",
+      "scopes": [
+        "tool_result",
+        "user"
+      ],
+      "action": "warn",
+      "pattern": "(?i)(urgent|immediately|right now).{0,120}(ceo|cfo|skip|waived|bypass|responsibility)",
+      "ref": "CEO fraud pattern"
+    },
+    {
+      "id": "SIG-004",
+      "name": "code execution payload in arguments",
+      "scopes": [
+        "tool_args"
+      ],
+      "action": "block",
+      "pattern": "(?i)(os\\.system|subprocess\\.|__import__\\(|\\beval\\s*\\(|\\bexec\\s*\\(|pickle\\.loads)",
+      "ref": "CVE-2023-29374 (LLM output passed to exec)"
+    },
+    {
+      "id": "SIG-005",
+      "name": "path traversal",
+      "scopes": [
+        "tool_args"
+      ],
+      "action": "block",
+      "pattern": "(\\.\\./|\\.\\.\\\\)",
+      "ref": "CVE-2024-37032 (path traversal in model pull)"
+    },
+    {
+      "id": "SIG-006",
+      "name": "cloud metadata endpoint",
+      "scopes": [
+        "tool_args"
+      ],
+      "action": "block",
+      "pattern": "(169\\.254\\.169\\.254|metadata\\.google\\.internal)",
+      "ref": "SSRF to instance credentials"
+    },
+    {
+      "id": "SIG-007",
+      "name": "markdown image exfiltration",
+      "scopes": [
+        "tool_args"
+      ],
+      "action": "block",
+      "pattern": "!\\[[^\\]]*\\]\\(https?://",
+      "ref": "CVE-2025-32711 (EchoLeak)"
+    },
+    {
+      "id": "SIG-008",
+      "name": "hidden instruction in a tool description",
+      "scopes": [
+        "tool_description",
+        "tool_result"
+      ],
+      "action": "block",
+      "pattern": "(?i)(<important>|do not (mention|tell|inform) (this|the user)|before using this tool,? (you must|call|read)|ignore the user)",
+      "ref": "MCP tool poisoning (Invariant Labs, 2025); OWASP LLM01"
+    }
+  ]
+}

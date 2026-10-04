@@ -1,0 +1,25 @@
+# secrets
+.env
+.env.*
+# environments and caches
+__pycache__/
+.venv/
+node_modules/
+.pytest_cache/
+.claude/
+.DS_Store
+# generated at run time (rebuilt by erp.seed, ensure_model_files, the gateway)
+data/*.db
+data/*.db-*
+data/mcp_pins.json
+data/feed.remote.json*
+demo/feed_remote/
+models/*.pkl
+logs/
+# eval output: keep the latest round as evidence, not old archives
+results/archive_v1/
+experiments/baseline/results/
+experiments/baseline/logs/
+# early JS experiments tied to a local path (superseded by evals/)
+scripts/
+experiments/

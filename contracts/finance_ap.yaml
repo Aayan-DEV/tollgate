@@ -1,0 +1,92 @@
+# Resolver pack: Finance / accounts payable.
+# One contract per tool. A contract says which facts to look up (read-only)
+# and which checks the call must pass. No code: onboarding a new tool means
+# writing a block like these. Hot-reloaded like policy.yaml.
+#
+# Values:  args.x      argument of the tool call
+#          <fact>.x    field of a looked-up fact
+#          @a.b        value from policy.yaml (so limits stay in one place)
+#          anything else is a literal
+# Check types: present, equals, same_iban, number_equals, empty, at_most, is_true, never
+# decision: ask | block, or @controls.x from policy.yaml; a control set to "redact" masks the args listed in `redact`
+# and checks again (if the data is still there, for example hidden in base64, it blocks).
+# A check that references a fact that does not exist is skipped (its "present" check reports it).
+
+pay_invoice:
+  summary: "pay {args.amount_eur} EUR to {vendor.name} for {args.invoice_id} (due {invoice.due_date}) -> {args.iban}"
+  plain: "Pay {args.amount_eur} EUR to {vendor.name|args.vendor_id} for invoice {args.invoice_id}"
+  entities: [args.invoice_id, args.vendor_id, vendor.name]
+  bind: {amount_eur: invoice.amount, iban: vendor.iban, vendor_id: invoice.vendor_id}
+  atomic: true
+  facts:
+    invoice: {fn: erp.invoice, args: [args.invoice_id]}
+    vendor: {fn: erp.vendor, args: [args.vendor_id]}
+    paid: {fn: erp.payments_for_invoice, args: [args.invoice_id]}
+    similar: {fn: erp.similar_payments, args: [args.vendor_id, args.amount_eur, args.invoice_id, invoice.document, "@payments.duplicate_window_days", "@payments.amount_tolerance_eur"]}
+  checks:
+    - {id: invoice_exists, type: present, path: invoice, decision: block,
+       message: "invoice {args.invoice_id} does not exist; only pay invoices returned by list_open_invoices",
+       plain: "There is no invoice {args.invoice_id}."}
+    - {id: known_vendor, type: present, path: vendor, decision: block,
+       message: "payee {args.vendor_id} is not in the vendor master data",
+       plain: "{args.vendor_id} is not one of our suppliers."}
+    - {id: invoice_vendor, type: equals, left: invoice.vendor_id, right: args.vendor_id, decision: block,
+       message: "invoice belongs to vendor {invoice.vendor_id}, not {args.vendor_id}",
+       plain: "This invoice belongs to a different supplier."}
+    - {id: approved, type: equals, left: invoice.status, right: approved, decision: block,
+       message: "invoice status is '{invoice.status}', not 'approved'",
+       plain: "Nobody has approved this invoice yet."}
+    - {id: iban_on_file, type: same_iban, left: args.iban, right: vendor.iban, decision: block,
+       message: "account is not the verified one on file ({vendor.iban}); bank details from documents are never used",
+       plain: "The money would go to a bank account that is not the one we have on file for {vendor.name|args.vendor_id}. Changed bank details are a classic scam."}
+    - {id: exact_amount, type: number_equals, left: args.amount_eur, right: invoice.amount, tolerance: "@payments.amount_tolerance_eur",
+       decision: block, message: "amount {args.amount_eur} EUR does not match the invoice total {invoice.amount} EUR",
+       plain: "The amount ({args.amount_eur} EUR) does not match the invoice ({invoice.amount} EUR)."}
+    - {id: not_paid, type: empty, path: paid, decision: block,
+       message: "invoice already paid or in flight: {paid}",
+       plain: "This invoice has already been paid."}
+    - {id: no_recent_duplicate, type: empty, path: similar, decision: ask,
+       message: "same vendor and amount paid recently ({similar}); likely a resend",
+       plain: "We paid this supplier the same amount a few days ago. It looks like the same bill sent twice, so a person checks."}
+    - {id: approval_limit, type: at_most, value: args.amount_eur, limit: "@payments.require_approval_above_eur", decision: ask,
+       message: "{args.amount_eur} EUR is above the {@payments.require_approval_above_eur} EUR approval limit",
+       plain: "{args.amount_eur} EUR is more than this person may pay alone (up to {@payments.require_approval_above_eur} EUR), so a manager approves."}
+
+send_email:
+  summary: "email '{args.subject}' to {args.to}"
+  plain: "Email \"{args.subject}\" to {args.to}"
+  entities: [args.to]
+  facts:
+    external: {fn: mail.external_recipients, args: [args.to, "@email.internal_domains"]}
+    leaking: {fn: mail.external_if_sensitive, args: [args.to, args.subject, args.body, "@email.internal_domains"]}
+  checks:
+    - {id: no_sensitive_to_outside, type: empty, path: leaking, decision: "@controls.sensitive_email", redact: [subject, body],
+       message: "sends bank or personal data to outside address {leaking}",
+       plain: "The email would send bank or personal details outside the company."}
+    - {id: no_outside_recipient, type: empty, path: external, decision: ask,
+       message: "sends a message to outside address {external}",
+       plain: "The email goes outside the company, so a person checks it first."}
+
+update_vendor_bank_details:
+  summary: "change bank account of {args.vendor_id} to {args.new_iban}"
+  plain: "Change the bank account of supplier {args.vendor_id}"
+  entities: [args.vendor_id]
+  facts: {}
+  checks:
+    - {id: bank_change_needs_callback, type: never, decision: block,
+       message: "vendor bank changes need phone verification by finance, never an agent",
+       plain: "Bank details are only changed by finance after a phone call to the supplier, never by an AI."}
+
+load_forecast_model:
+  summary: "load model file {args.path}"
+  plain: "Open the file {args.path}"
+  entities: [args.path]
+  facts:
+    scan: {fn: files.pickle_scan, args: [args.path]}
+  checks:
+    - {id: inside_model_dir, type: is_true, path: scan.inside, decision: block, message: "path is outside the approved models folder",
+       plain: "That file is outside the approved folder."}
+    - {id: file_exists, type: is_true, path: scan.exists, decision: block, message: "model file does not exist", plain: "That file does not exist."}
+    - {id: safe_pickle, type: is_true, path: scan.ok, decision: block,
+       message: "unsafe deserialization: pickle imports {scan.dangerous}",
+       plain: "The file contains hidden code that would run on our server when opened."}

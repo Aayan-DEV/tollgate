@@ -1,0 +1,158 @@
+/* THE AGENT ROOM, after Panlytics' room: the conversation in the middle, what the
+   layer did beside it. The room fills what is left of the window; each column
+   scrolls inside itself and the composer stays at the foot. */
+
+.agent-room { flex: 1 1 auto; min-height: 0; display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); corner-shape: squircle; }
+.agent-thread { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.agent-head { display: flex; align-items: center; gap: 8px; height: 48px; flex: none; padding: 1px 10px 0 16px; border-bottom: 1px solid var(--line); }
+.agent-head-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agent-tag { flex: none; padding: 2px 7px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 11px; font-weight: 600; color: var(--ink-3); }
+
+.agent-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px; }
+.agent-column { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+/* Centred when it fits; when the starters are taller than the room it scrolls from the top instead of
+   overflowing both ends (justify-content: center would cut off the first and last rows, unreachable). */
+.agent-scroll.is-empty { display: flex; flex-direction: column; }
+.agent-scroll.is-empty > .agent-column { margin-block: auto; width: 100%; }
+
+/* ---- the empty room ---- */
+.room-empty { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.room-empty-mark { width: 48px; height: 48px; display: grid; place-items: center; border-radius: var(--r); border: 1px solid var(--line); background: var(--surface-2); color: var(--ink-2); corner-shape: squircle; }
+.room-empty h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: var(--tr-title); }
+.room-empty p { max-width: 520px; font-size: 13.5px; color: var(--ink-3); }
+.starters { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; width: 100%; max-width: 720px; margin-top: 4px; }
+.starter {
+  display: grid; grid-template-columns: 20px minmax(0, 1fr); column-gap: 10px; row-gap: 6px; align-items: start; padding: 10px 12px;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); text-align: left; font-size: 13px; color: var(--ink-2); line-height: 1.4;
+  transition: background-color .16s var(--ease), color .16s var(--ease);
+}
+.starter:hover { background: var(--surface-3); color: var(--ink); }
+.starter .chip { grid-column: 2; justify-self: start; }
+.starter svg[data-icon] { color: var(--ink-3); margin-top: 1px; }
+
+/* ---- who is speaking ---- */
+.agent-exchange { display: flex; flex-direction: column; gap: 20px; }
+.agent-you { align-self: flex-end; max-width: 78%; padding: 10px 14px 11px; border-radius: var(--r); background: var(--surface-3); font-size: 14.5px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-them { display: grid; grid-template-columns: 26px minmax(0, 1fr); column-gap: 12px; }
+.agent-them-mark { width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); margin-top: 1px; }
+.agent-them-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.agent-answer { font-size: 14.5px; line-height: 1.6; color: var(--ink); overflow-wrap: anywhere; }
+.agent-answer p + p, .agent-answer p + ul, .agent-answer ul + p { margin-top: 8px; }
+.agent-answer ul { margin: 0; padding-left: 20px; }
+.agent-answer li + li { margin-top: 4px; }
+.agent-answer strong { font-weight: 600; }
+.agent-answer code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; background: var(--surface-3); padding: 1px 5px; border-radius: var(--r-xs); }
+.agent-error { color: var(--bad); }
+
+/* ---- the work, behind one row ---- */
+.agent-work { display: flex; flex-direction: column; gap: 10px; }
+.agent-work-row {
+  display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; min-height: 26px; padding: 0 8px 0 6px; margin-left: -6px;
+  border-radius: var(--r-sm); font-size: 12.5px; font-weight: 600; color: var(--ink-3); transition: background-color .16s var(--ease), color .16s var(--ease);
+}
+.agent-work-row:hover { background: var(--surface-3); color: var(--ink); }
+.agent-work-row svg[data-icon] { width: 16px; height: 16px; }
+.agent-work-row .w-bad { color: var(--bad); }
+.agent-work-row .w-warn { color: var(--warn); }
+.live-dot { width: 6px; height: 6px; border-radius: 1px; background: var(--ink); animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+
+/* The ledger: the panel said smaller (dense), one 32 px line per tool. */
+.ledger { border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; corner-shape: squircle; }
+.ledger-row { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 5px 12px; border-top: 1px solid var(--line); font-size: 13px; }
+.ledger-row:first-child { border-top: 0; }
+.ledger-row svg[data-icon] { color: var(--ink-3); width: 18px; height: 18px; }
+.ledger-row .l-name { flex: none; color: var(--ink-2); font-weight: 500; }
+.ledger-row .l-said { flex: 1; min-width: 0; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ledger-row .l-val { flex: none; font-size: 12.5px; font-weight: 600; color: var(--ink-3); }
+.ledger-row.is-block { background: var(--bad-tint); box-shadow: inset 3px 0 0 var(--bad); }
+.ledger-row.is-block .l-val { color: var(--bad); }
+.ledger-row.is-ask { background: var(--warn-tint); box-shadow: inset 3px 0 0 var(--warn); }
+.ledger-row.is-ask .l-val { color: var(--warn); }
+.ledger-row.is-off .l-val { color: var(--ink-3); font-style: italic; }
+.ledger-row.is-running .l-val { color: var(--ink); }
+.ledger-why { padding: 0 12px 8px 40px; font-size: 12.5px; color: var(--ink-2); background: inherit; }
+.ledger-row.is-block + .ledger-why { background: var(--bad-tint); color: var(--bad-deep); box-shadow: inset 3px 0 0 var(--bad); }
+.ledger-row.is-ask + .ledger-why { background: var(--warn-tint); color: var(--warn-deep); box-shadow: inset 3px 0 0 var(--warn); }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- the composer ---- */
+.agent-dock { flex: none; padding: 0 24px 16px; }
+.composer {
+  max-width: 760px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); box-shadow: var(--shadow-pop);
+  transition: border-color .16s var(--ease);
+}
+.composer:focus-within { border-color: var(--ink-3); }
+.composer textarea { flex: 1; min-height: 36px; max-height: 180px; resize: none; border: 0; outline: 0; padding: 7px 0; background: transparent; font-size: 14.5px; line-height: 1.5; }
+.composer textarea::placeholder { color: var(--ink-3); }
+.composer .key { min-height: 36px; padding: 0 12px; }
+.dock-note { max-width: 760px; margin: 8px auto 0; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-3); }
+.dock-note svg[data-icon] { width: 14px; height: 14px; }
+
+/* ---- the run pane: what the layer did, live ---- */
+.agent-pane { width: 380px; flex: none; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--surface); }
+.agent-pane .pn-head { min-height: 48px; padding: 6px 14px; }
+.pane-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.pane-empty { padding: 16px; font-size: 13px; color: var(--ink-3); line-height: 1.55; }
+.pane-empty b { color: var(--ink-2); font-weight: 600; }
+.dec { display: flex; gap: 10px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.dec:first-child { border-top: 0; }
+.dec-ico { flex: none; color: var(--ink-3); margin-top: 1px; }
+.dec-main { min-width: 0; flex: 1; }
+.dec-top { display: flex; align-items: center; gap: 8px; }
+.dec-what { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dec-why { margin-top: 3px; font-size: 12.5px; color: var(--ink-2); line-height: 1.45; }
+.dec-judge { margin-top: 4px; font-size: 12px; color: var(--ink-3); line-height: 1.45; }
+.dec-judge q { font-style: italic; color: var(--ink-2); }
+.dec-judge svg[data-icon] { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin-right: 2px; }
+.dec-ms { margin-top: 4px; font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.dec.is-block { background: var(--bad-tint); box-shadow: inset 3px 0 0 var(--bad); }
+.dec.is-block .dec-ico, .dec.is-block .dec-why { color: var(--bad-deep); }
+.dec.is-ask { background: var(--warn-tint); box-shadow: inset 3px 0 0 var(--warn); }
+.dec.is-ask .dec-ico, .dec.is-ask .dec-why { color: var(--warn-deep); }
+.dec.is-off { box-shadow: inset 3px 0 0 var(--ink-3); }
+
+/* ---- an approval: the one card in the pane ---- */
+.ap-card { margin: 12px 14px; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.ap-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; background: var(--warn-tint); color: var(--warn-deep); font-size: 12.5px; font-weight: 600; }
+.ap-head svg[data-icon] { width: 18px; height: 18px; }
+.ap-body { padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.ap-what { font-size: 13.5px; font-weight: 600; }
+.ap-why { font-size: 12.5px; color: var(--ink-2); }
+.ap-meta { font-size: 12px; color: var(--ink-3); }
+.ap-keys { display: flex; gap: 8px; padding: 0 12px 12px; align-items: center; flex-wrap: wrap; }
+.ap-done { padding: 0 12px 12px; font-size: 12.5px; color: var(--ink-2); }
+.ap-card.is-approved .ap-head { background: var(--good-tint); color: var(--good-deep); }
+.ap-card.is-declined .ap-head, .ap-card.is-blocked .ap-head { background: var(--surface-3); color: var(--ink-2); }
+
+@media (max-width: 1180px) { .agent-pane { display: none; } }
+
+/* ---- the conversations: Panlytics' left column, 260 px of paper against the white thread ---- */
+.agent-list { flex: 0 0 260px; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); background: var(--surface-2); }
+.agent-list-head { padding: 10px 10px 8px; border-bottom: 1px solid var(--line); }
+.agent-list-head .key { width: 100%; justify-content: flex-start; }
+.agent-list-band { padding: 12px 14px 6px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--ink-3); }
+.agent-list-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 6px 10px; }
+.chat-row {
+  display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 8px 10px 9px; margin-top: 2px;
+  border: 1px solid transparent; border-radius: var(--r-sm); text-align: left; corner-shape: squircle;
+  transition: background-color .16s var(--ease);
+}
+.chat-row:hover { background: var(--surface-3); }
+.chat-row.is-on { background: var(--surface); border-color: var(--line); }
+.chat-row-title { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-row.is-on .chat-row-title { color: var(--ink); }
+.chat-row.is-empty .chat-row-title { color: var(--ink-3); font-weight: 500; }
+.chat-row-sub { font-size: 11.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1280px) { .agent-list { display: none; } }
+
+.ledger-row.is-via { padding-left: 28px; }
+.l-via { font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-left: 4px; }
+
+/* chats column: new chat + delete all, test chats tagged */
+.agent-list-head { display: flex; gap: 6px; }
+.agent-list-head .key { width: auto; flex: 1; }
+.agent-list-head .key.is-icon { flex: none; width: 36px; padding: 0; justify-content: center; }
+.chat-tag { display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .02em; color: var(--ink-3); background: var(--surface-3); vertical-align: 1px; }

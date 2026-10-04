@@ -1,0 +1,25 @@
+[project]
+name = "tollgate"
+version = "0.1.0"
+description = "Action-level control layer for AI agents: resolve what a tool call would do, check it, justify it, then allow, ask or block."
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28",
+    "pydantic>=2.10",
+    "pyyaml>=6.0",
+    "google-genai>=1.40",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+    "mcp>=2.3.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.3", "pytest-asyncio>=0.25"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q"
+
+[tool.uv]
+package = false

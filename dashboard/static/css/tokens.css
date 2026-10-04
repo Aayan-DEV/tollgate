@@ -1,0 +1,92 @@
+/* The Panlytics design law, light palette, held to black and white.
+   One family (Inter), an 8 px grid, soft warm hairlines, squircle corners,
+   and exactly three motions: a press, a flip and the switch's thumb. */
+
+:root {
+  color-scheme: light;
+  --ink: #17171a;
+  --ink-2: #45454e;
+  --ink-3: #68686f;
+  --paper: #ffffff;
+  --rail-ground: #f4f3f0;
+  --surface: #ffffff;
+  --surface-2: #f9f8f6;
+  --surface-3: #f1f0ec;
+  --surface-sunken: #ecebe7;
+  --line: #e6e4df;
+  --accent-solid: #17171a;
+  --accent-solid-hover: #2e2e33;
+  --accent-quiet: #f1f0ec;
+  --accent-line: #dcdbd5;
+  --on-accent: #ffffff;
+
+  --good: #1e6b47;
+  --good-deep: #165437;
+  --good-tint: #eaf1ed;
+  --bad: #9a3128;
+  --bad-deep: #79251e;
+  --bad-tint: #f7edeb;
+  --warn: #7a5310;
+  --warn-deep: #5f400b;
+  --warn-tint: #f5f0e6;
+
+  --shadow-pop: 0 10px 24px -14px rgb(23 23 26 / 0.22), 0 1px 2px rgb(23 23 26 / 0.08);
+
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r: 8px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0.35, 1);
+  --spring: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --press-scale: 0.97;
+  --dur-press: 180ms;
+  --dur-flip: 160ms;
+
+  --icon-row: 20px;
+  --icon-head: 24px;
+  --icon-chip: 18px;
+
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tr-title: -0.018em;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; overscroll-behavior: none; }
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.006em;
+  color: var(--ink);
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11";
+}
+button, input, textarea { font: inherit; color: inherit; letter-spacing: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+a { color: inherit; text-decoration: none; }
+p { margin: 0; }
+.figure { font-variant-numeric: tabular-nums lining-nums; font-feature-settings: "tnum"; }
+
+/* Every box with a token corner is a squircle; a browser that does not know the
+   property draws the plain arc, which is the fallback. */
+.pn-panel, .key, .field, .rl-row, .rl-ctl, .menu, .menu-row, .chip, .seg, .seg-cell, .notice, .agent-you,
+.agent-work-row, .composer, .starter, .tb-who, .ap-card, .tbl-pick {
+  corner-shape: squircle;
+}
+
+/* Icons: one family, the size comes from the box. */
+svg[data-icon] { width: var(--icon-row); height: var(--icon-row); flex: none; display: block; }
+.ico-head svg[data-icon], .key svg[data-icon] { width: var(--icon-head); height: var(--icon-head); }
+.chip svg[data-icon] { width: var(--icon-chip); height: var(--icon-chip); }
+
+/* A flip turns one mark; it never swaps two. */
+.turn { display: inline-flex; transition: transform var(--dur-flip) var(--ease); }
+.turn.is-open { transform: rotate(var(--turn, 90deg)); }
+
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: var(--r-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .turn, .key, .sw-thumb { transition: none !important; }
+  .key:active { transform: none !important; }
+}

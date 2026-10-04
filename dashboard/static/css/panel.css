@@ -1,0 +1,54 @@
+/* The panel system: a hairline box, a 48 px header, 44 px rows, ruled not spaced. */
+
+.pn-panel { border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); overflow: hidden; }
+.pn-head { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.pn-head-ico { display: inline-flex; flex: none; color: var(--ink-2); }
+.pn-head-ico svg[data-icon] { width: var(--icon-head); height: var(--icon-head); }
+.pn-head-title { margin: 0; font-size: 15.5px; font-weight: 600; line-height: 1.25; letter-spacing: var(--tr-title); white-space: nowrap; }
+.pn-head-hint { min-width: 0; flex: 1 1 auto; font-size: 13px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pn-head-right { flex: none; margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.pn-head-count { font-size: 14px; font-weight: 600; color: var(--ink); }
+
+.pn-rows { margin: 0; padding: 0; list-style: none; }
+.pn-row { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.pn-row:first-child { border-top: 0; }
+.pn-row-ico { display: inline-flex; flex: none; color: var(--ink-3); }
+.pn-row-main { min-width: 0; flex: 1 1 auto; }
+.pn-row-label { display: block; font-size: 14px; line-height: 1.4; color: var(--ink-2); }
+.pn-row-label b { font-weight: 600; color: var(--ink); }
+.pn-row-sub { display: block; margin-top: 2px; font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+.pn-row-val { flex: none; margin-left: auto; text-align: right; white-space: nowrap; font-size: 14px; color: var(--ink); }
+.pn-row.is-ruled { padding-left: 13px; border-left: 3px solid transparent; }
+.pn-row.is-ruled.is-bad { background: var(--bad-tint); border-left-color: var(--bad); }
+.pn-row.is-ruled.is-warn { background: var(--warn-tint); border-left-color: var(--warn); }
+.pn-row.is-ruled.is-good { border-left-color: var(--good); }
+.pn-row.is-ruled.is-off { border-left-color: var(--ink-3); }
+
+.pn-figs { display: grid; grid-template-columns: repeat(var(--pn-cols, 4), minmax(0, 1fr)); }
+.pn-fig { min-width: 0; padding: 16px; border-left: 1px solid var(--line); }
+.pn-fig:first-child { border-left: 0; }
+.pn-fig-label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-3); line-height: 1.3; }
+.pn-fig-val { display: block; margin-top: 6px; font-size: 26px; font-weight: 500; line-height: 1.05; letter-spacing: -0.02em; }
+.pn-fig-val.is-bad { color: var(--bad); }
+.pn-fig-val.is-warn { color: var(--warn); }
+.pn-fig-note { display: block; margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+
+.pn-body { padding: 16px; }
+.pn-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px 16px; border-top: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; color: var(--ink-3); }
+.pn-empty { padding: 16px; font-size: 13.5px; color: var(--ink-3); }
+
+.pn-table-wrap { overflow: auto; overscroll-behavior: contain; }
+.pn-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.pn-table th {
+  position: sticky; top: 0; z-index: 1; height: 40px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; text-align: left; color: var(--ink-3); white-space: nowrap;
+}
+.pn-table td { height: 40px; padding: 8px 12px; border-top: 1px solid var(--line); color: var(--ink-2); white-space: nowrap; max-width: 280px; overflow: hidden; text-overflow: ellipsis; }
+.pn-table tr:first-child td { border-top: 0; }
+.pn-table th:first-child, .pn-table td:first-child { padding-left: 16px; }
+.pn-table tbody tr:hover td { background: var(--surface-3); }
+.pn-table .is-num { text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+.pn-stack { display: flex; flex-direction: column; gap: 16px; }
+.pn-split { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; }
+@media (max-width: 1180px) { .pn-split { grid-template-columns: 1fr; } }

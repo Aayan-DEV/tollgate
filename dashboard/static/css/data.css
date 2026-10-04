@@ -1,0 +1,38 @@
+/* The data page: the database as it is, and as the agent may see it for this person. */
+
+.data-room { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; }
+.data-list { display: flex; flex-direction: column; min-height: 0; }
+.data-list .pn-rows { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.tbl-pick {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 14px; border-top: 1px solid var(--line);
+  text-align: left; font-size: 13px; color: var(--ink-2); transition: background-color .16s var(--ease);
+}
+.tbl-pick:first-child { border-top: 0; }
+.tbl-pick:hover { background: var(--surface-3); }
+.tbl-pick.is-on { background: var(--surface-3); color: var(--ink); font-weight: 600; box-shadow: inset 3px 0 0 var(--ink); }
+.tbl-pick .t-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbl-pick .t-rows { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.tbl-pick svg[data-icon] { width: 18px; height: 18px; color: var(--ink-3); }
+.tbl-pick.is-closed .t-name { color: var(--ink-3); }
+
+.data-view { display: flex; flex-direction: column; min-height: 0; }
+.data-view .pn-table-wrap { flex: 1; min-height: 0; }
+.cell-hidden { color: var(--ink-3) !important; font-style: italic; background: repeating-linear-gradient(-45deg, transparent 0 6px, var(--surface-3) 6px 7px); }
+.cell-masked { color: var(--ink) !important; font-weight: 500; }
+.th-hidden { color: var(--ink-3); text-decoration: line-through; }
+.data-foot { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); background: var(--surface-2); font-size: 12.5px; color: var(--ink-3); }
+.data-foot .df-right { margin-left: auto; display: flex; gap: 6px; }
+.closed-plate { flex: 1; display: grid; place-items: center; padding: 40px; }
+.closed-plate > div { max-width: 460px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.closed-plate h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.closed-plate p { font-size: 13.5px; color: var(--ink-3); }
+.closed-mark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: var(--r); background: var(--surface-3); color: var(--ink-2); corner-shape: squircle; }
+
+/* The rank matrix on the layer page. */
+.rank-grid { width: 100%; border-collapse: collapse; font-size: 13px; }
+.rank-grid th, .rank-grid td { padding: 8px 10px; white-space: nowrap; border-top: 1px solid var(--line); text-align: left; }
+.rank-grid th { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); background: var(--surface-2); border-top: 0; }
+.rank-grid td.is-yes { color: var(--ink); }
+.rank-grid td.is-no { color: var(--ink-3); }
+.rank-grid tr.is-current td { background: var(--surface-3); }
+.pn-note span svg[data-icon] { display: inline-block; width: 14px; height: 14px; vertical-align: -2px; margin: 0 2px; }

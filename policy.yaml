@@ -1,0 +1,206 @@
+# Tollgate policy: the single source of truth for every control.
+# Edit and save while the gateway runs; changes apply on the next call (hot reload).
+# An invalid edit is rejected and the last good version stays active.
+
+version: 1
+# Strictness preset. It fills every control below that this file does not set itself.
+# Precedence: runtime override (dashboard) > this file > preset > built-in default.
+preset: balanced            # lenient | balanced | strict
+
+presets:
+  lenient:                  # fewest interruptions: redact or warn where another control still contains the harm
+    controls.secrets.in_args: redact
+    controls.secrets.in_results: redact
+    controls.injection.mode: rules
+    controls.injection.action: warn
+    controls.injection.threshold: 0.7
+    controls.injection.after_detection: none
+    controls.sensitive_email: redact
+    controls.unknown_tool: ask
+    justify.on_error: ask
+  balanced:                 # default: block what is known bad, remove what is suspicious, ask when unsure
+    controls.secrets.in_args: block
+    controls.secrets.in_results: redact
+    controls.injection.mode: cascade
+    controls.injection.action: redact
+    controls.injection.threshold: 0.5
+    controls.injection.after_detection: none
+    controls.sensitive_email: block
+    controls.unknown_tool: ask
+    justify.on_error: ask
+  strict:                   # regulated or unattended runs: withhold, block and hold rather than continue
+    controls.secrets.in_args: block
+    controls.secrets.in_results: block
+    controls.injection.mode: cascade
+    controls.injection.action: block
+    controls.injection.threshold: 0.35
+    controls.injection.after_detection: ask
+    controls.sensitive_email: block
+    controls.unknown_tool: block
+    justify.on_error: block
+
+# Per-control settings. Set a value here to pin it regardless of the preset.
+#   secrets.in_args         a credential about to leave through a tool: allow | redact | ask | block
+#   secrets.in_results      a credential in what the agent reads: allow | redact | block
+#   injection.mode          off | rules | cascade (rules, then a small model on grey text, then a bigger model to confirm)
+#   injection.action        warn | redact (remove the sentence) | block (withhold the whole result)
+#   injection.after_detection  none | ask (irreversible actions after a detection need a human)
+#   sensitive_email         bank or personal data to an outside address: redact | ask | block
+#   unknown_tool            a tool not in the catalog: ask | block
+controls:
+  injection:
+    grey_from: 0.3
+    screen_model: qwen3:0.6b    # small and fast: only screens grey sentences
+    screen_flag_at: 0.5
+    confirm_model: qwen3:8b     # only runs when the small model flags something
+    timeout_s: 20
+    max_model_sentences: 4
+    screen_tools: [read_invoice, "*__*"]   # documents and every third-party MCP tool
+
+# Resolver packs: declarative contracts that resolve and check tool calls (also hot reloaded).
+contracts: [contracts/finance_ap.yaml]
+
+# Which tools exist and how dangerous their effects are.
+#   read          runs freely (results still pass the data guard)
+#   irreversible  money moves, data leaves, records change: contract checks + justify
+#   deny          never runs
+# Any tool not listed is unknown and held for a human.
+tools:
+  read: [list_open_invoices, read_invoice, list_vendors, get_vendor, get_payment_history, query_db,
+         vendor_portal__get_vendor_notice]
+  irreversible: [pay_invoice, send_email, update_vendor_bank_details, load_forecast_model]
+  deny: []
+
+# What the agent may READ. Enforced inside the database engine (SQLite authorizer).
+data:
+  role: ap_agent
+  roles:
+    ap_agent:                 # tables not listed here are denied (employees, payroll, customers, cards, bank accounts...)
+      tables:
+        vendors: {deny_columns: [contact_phone, notes]}
+        invoices: {row_scope: entity_id}
+        invoice_lines: {}
+        payments: {row_scope: entity_id}
+        purchase_orders: {row_scope: entity_id}
+        goods_receipts: {}
+        vendor_bank_change_requests: {}
+        legal_entities: {}
+    controller:               # Finance Controller: the clerk's tables plus cash, customers and payroll totals
+      tables:
+        vendors: {deny_columns: [contact_phone, notes]}
+        invoices: {row_scope: entity_id}
+        invoice_lines: {}
+        payments: {row_scope: entity_id}
+        purchase_orders: {row_scope: entity_id}
+        goods_receipts: {}
+        vendor_bank_change_requests: {}
+        legal_entities: {}
+        company_bank_accounts: {row_scope: entity_id}
+        bank_transactions: {}
+        customers: {row_scope: entity_id, deny_columns: [contact_email, phone]}
+        payroll_runs: {row_scope: entity_id}
+    cfo:                      # CFO: everything, but never anyone's private personal data
+      tables:
+        vendors: {}
+        invoices: {row_scope: entity_id}
+        invoice_lines: {}
+        payments: {row_scope: entity_id}
+        purchase_orders: {row_scope: entity_id}
+        goods_receipts: {}
+        vendor_bank_change_requests: {}
+        legal_entities: {}
+        company_bank_accounts: {row_scope: entity_id}
+        bank_transactions: {}
+        customers: {row_scope: entity_id}
+        payroll_runs: {row_scope: entity_id}
+        payroll_lines: {deny_columns: [iban]}
+        employees: {row_scope: entity_id, deny_columns: [national_id, date_of_birth, home_street, home_city, home_postal_code,
+                                                       private_email, private_phone, private_iban, emergency_contact]}
+        corporate_cards: {}
+        app_users: {}
+  sql_tools: [query_db]
+  max_rows_per_query: 200
+  max_full_ibans_per_session: 10      # data budget, only used by tools listed in reveal_full_iban_tools
+  reveal_full_iban_tools: []          # none: payments bind the verified account, so the agent only needs PL61...2874
+  mask: [iban, national_id]           # masked in every tool result
+
+# MCP: other MCP servers the gateway sits in front of. Their tools are scanned and pinned by hash;
+# a changed or poisoned description is quarantined until a person approves it.
+mcp:
+  upstreams:
+    - {name: vendor_portal, command: [python, -m, demo.vendor_portal_mcp]}
+  pins_path: data/mcp_pins.json
+  auto_pin_new: true
+
+# Agent identity: every agent carries a token signed by the gateway (who it is, who it acts for,
+# which tools, how much per action, who delegated to it). Delegation can only narrow.
+identity:
+  required: true
+  max_delegation_depth: 2       # orchestrator -> sub-agent -> sub-sub-agent at most
+  token_ttl_s: 3600
+
+# The people the agent acts for. No login in the demo: pick a person, and their rank decides
+# what the agent may read (data role), which entities it sees, and how much it may pay alone.
+people:
+  - {id: piotr, name: Piotr Mazur, rank: AP Clerk, level: 1, data_role: ap_agent, entities: [PL01],
+     approval_limit_eur: 10000, max_action_eur: 25000, can_approve: false}
+  - {id: marta, name: Marta Zielinska, rank: Finance Controller, level: 2, data_role: controller, entities: [PL01, DE01],
+     approval_limit_eur: 50000, max_action_eur: 100000, can_approve: true}
+  - {id: anna, name: Anna Nowak, rank: CFO, level: 3, data_role: cfo, entities: [PL01, DE01, CZ01],
+     approval_limit_eur: 250000, max_action_eur: 500000, can_approve: true}
+
+models:
+  allowed: [qwen3:8b, qwen3:14b, llama3.1:8b, gemma3:1b, gemini-2.5-flash]
+  pricing_usd_per_1m:                 # commercial API list prices (check the provider's current price list)
+    gemini-2.5-flash: {input: 0.30, output: 2.50}
+  local_usd_per_compute_second: 0.0002
+
+budgets:
+  session:
+    max_usd: 0.25            # per agent session (a 13-invoice batch costs about $0.05 on Gemini Flash)
+    max_tokens: 400000
+    max_steps: 60             # model turns per session
+    max_identical_calls: 2    # same tool + same arguments with no state change in between; the 3rd is a loop
+  on_exceed: block            # block | fallback
+  fallback_model: qwen3:8b
+
+# Cumulative limits over time windows, shared by all gateway processes (stops splitting and slow leaks).
+limits:
+  - {id: vendor_daily_outflow, tools: [pay_invoice], measure: amount_eur, per: vendor_id, window_minutes: 1440, max: 10000, decision: ask}
+  - {id: agent_daily_outflow, tools: [pay_invoice], measure: amount_eur, per: agent, window_minutes: 1440, max: 50000, decision: ask}
+  - {id: external_emails_per_hour, tools: [send_email], measure: count, per: agent, window_minutes: 60, max: 5, decision: block}
+  - {id: rows_read_per_session, tools: [query_db], measure: rows, per: session, window_minutes: 1440, max: 2000, decision: block}
+
+state:
+  path: data/state.db
+
+payments:                     # referenced by contracts as @payments.*
+  require_approval_above_eur: 10000
+  amount_tolerance_eur: 0.01
+  duplicate_window_days: 60
+
+email:
+  internal_domains: [nordwind.example]
+
+# Justify: an AI judge must cite the user's own words that authorize an irreversible action.
+# It only sees the user's instructions and gateway-verified facts, never documents the agent read.
+justify:
+  enabled: true
+  judge_model: qwen3:14b
+  min_quote_words: 3
+  timeout_s: 45                # on_error (judge down or unparseable) comes from the preset: ask, or block when strict
+
+signatures:
+  feed_path: signatures/feed.json
+  require_signature: true     # feed.json.sig must be the HMAC-SHA256 of feed.json
+  refresh_seconds: 5
+  url: http://127.0.0.1:8500/feed.json   # the external feed (demo: uv run python -m demo.feed_server); null = local only
+  fetch_seconds: 10           # ETag poll; unreachable or tampered remote keeps the last good feed
+  remote_cache: data/feed.remote.json
+
+privacy:
+  redact_for_external_models: true    # IBANs, emails and IDs never reach a commercial API in clear text
+  external_providers: [gemini]
+
+audit:
+  path: logs/audit.jsonl
