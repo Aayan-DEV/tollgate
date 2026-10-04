@@ -150,7 +150,7 @@ people:
      approval_limit_eur: 250000, max_action_eur: 500000, can_approve: true}
 
 models:
-  allowed: [qwen3:8b, qwen3:14b, llama3.1:8b, gemma3:1b, gemini-2.5-flash]
+  allowed: [qwen3:8b, gemini-2.5-flash]
   pricing_usd_per_1m:                 # commercial API list prices (check the provider's current price list)
     gemini-2.5-flash: {input: 0.30, output: 2.50}
   local_usd_per_compute_second: 0.0002
@@ -186,7 +186,7 @@ email:
 # It only sees the user's instructions and gateway-verified facts, never documents the agent read.
 justify:
   enabled: true
-  judge_model: qwen3:14b
+  judge_model: qwen3:8b
   min_quote_words: 3
   timeout_s: 45                # on_error (judge down or unparseable) comes from the preset: ask, or block when strict
 

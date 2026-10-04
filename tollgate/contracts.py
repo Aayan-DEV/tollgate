@@ -34,6 +34,7 @@ class Check(BaseModel):
     message: str
     redact: list[str] = []           # with decision "redact": mask sensitive values in these args, then check again
     plain: str = ""                  # the message in everyday words (same {placeholders})
+    fixable: bool = False            # the agent's own value is wrong: it may look the real one up and try again
     path: str | None = None
     left: object = None
     right: object = None
@@ -222,7 +223,7 @@ def evaluate(tool: str, args: dict, kind: str, contract: Contract | None, fact_f
                                plain="Bank or personal details were taken out before it was sent.")
                 return effect, [note, *rest], ctx
             findings.append(Finding(f"{tool}.{c.id}", Decision("block" if d == "redact" else d), _fmt(c.message, ctx, policy_get),
-                                    plain=_fmt(c.plain, ctx, policy_get) if c.plain else ""))
+                                    plain=_fmt(c.plain, ctx, policy_get) if c.plain else "", fixable=c.fixable))
     entities = [str(v) for e in contract.entities if (v := _value(e, ctx, policy_get)) not in (MISSING, None)]
     effect = Effect(tool=tool, kind=kind, summary=_fmt(contract.summary, ctx, policy_get),
                     plain=_fmt(contract.plain, ctx, policy_get) if contract.plain else "", facts={"checks": verified},

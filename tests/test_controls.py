@@ -138,6 +138,27 @@ def test_bulk_vendor_list_is_masked(gate, store, record):
     record("data", "negative", True)
 
 
+def test_guessed_values_get_a_retry_note_but_scam_signals_do_not(gate, store, record):
+    """A guessed vendor id or amount is the agent's own mistake: the block says to look the real values up.
+    A different bank account is a fraud signal: blocked with no invitation to try again."""
+    guessed = asyncio.run(gate.call_tool("pay_invoice", {**PAY_12500, "vendor_id": "CLOUDHOST", "amount_eur": 999}, "ollama"))
+    assert guessed["status"] == "blocked" and "Look them up" in guessed["note"]
+    other_account = asyncio.run(gate.call_tool("pay_invoice", {**PAY_12500, "iban": "PL10105000997603123456789123"}, "ollama"))
+    assert other_account["status"] == "blocked" and "note" not in other_account
+    assert store.payments(invoice_id="INV-T2") == []
+    record("payments", "negative", True)
+
+
+def test_vendor_lookup_by_name(gate, store, record):
+    """Agents often know only the supplier's name; reads accept it (one clear match only)."""
+    res = asyncio.run(gate.call_tool("get_vendor", {"vendor_id": "CloudHost"}, "ollama"))
+    assert res["vendor_id"] == "V-103"
+    found = asyncio.run(gate.call_tool("list_vendors", {"search": "Vistula"}, "ollama"))
+    assert [r["vendor_id"] for r in found] == ["V-104"]
+    assert "error" in asyncio.run(gate.call_tool("get_vendor", {"vendor_id": "o"}, "ollama"))   # several match: no guess
+    record("data", "positive", True)
+
+
 def test_row_scope_hides_other_entities(gate, store, record):
     res = asyncio.run(gate.call_tool("query_db", {"sql": "SELECT COUNT(*) FROM invoices WHERE entity_id = 'DE01'"},
                                      "ollama"))
@@ -158,7 +179,10 @@ def _fake(answer):
     ({"decision": "allow", "quote": "the CFO approved this payment", "reason": "invented"}, Decision.ASK),
     ({"decision": "block", "quote": "do NOT pay anything to Krakow Logistics", "reason": "forbidden"}, Decision.BLOCK),
     ({"decision": "allow", "quote": "pay", "reason": "too short"}, Decision.ASK),
-], ids=["real quote allows", "invented quote held", "forbidding quote blocks", "too-short quote held"])
+    ({"decision": "allow", "quote": "[U2] Month-end run: please pay all approved invoices.", "reason": "asked"}, Decision.ALLOW),
+    ({"decision": "allow", "quote": "[U2] the CFO approved this payment", "reason": "invented"}, Decision.ASK),
+], ids=["real quote allows", "invented quote held", "forbidding quote blocks", "too-short quote held",
+        "labelled real quote allows", "labelled invented quote held"])
 def test_judge_quote_verification(monkeypatch, answer, want, record):
     monkeypatch.setattr(llm, "complete_json", _fake(answer))
     led = Ledger("j")
@@ -179,6 +203,26 @@ def test_judge_failure_fails_closed(monkeypatch, record):
     out = asyncio.run(Judge().justify(Effect("pay_invoice", "irreversible", "pay"), led, Justify(judge_model="x"), "x"))
     assert out["decision"] == Decision.ASK
     record("judge", "negative", True)
+
+
+def _write_many(path, tag):
+    log = AuditLog(path)   # a separate instance, as in a separate process
+    for i in range(150):
+        log.write({"tool": tag, "i": i})
+
+
+def test_audit_chain_survives_several_processes(tmp_path, record):
+    """Two processes (say the dashboard and a CLI test run) append to one log at the same time: the chain stays valid."""
+    import multiprocessing as mp
+    path = tmp_path / "shared.jsonl"
+    procs = [mp.get_context("spawn").Process(target=_write_many, args=(path, t)) for t in ("a", "b")]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join()
+    ok, n, msg = verify(path)
+    assert ok and n == 300, msg
+    record("audit", "negative", True)
 
 
 def test_audit_chain_survives_many_gates_on_one_file(tmp_path, record):

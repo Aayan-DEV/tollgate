@@ -33,6 +33,10 @@ TOOL_WORDS = {"pay_invoice": "payment", "send_email": "email", "update_vendor_ba
               "query_db": "database read", "delegate": "hand-off", "load_forecast_model": "file load"}
 
 
+def slug(model: str) -> str:
+    return model.replace(":", "_").replace("/", "_")
+
+
 def load_cases(only: list[str] | None = None) -> list[dict]:
     cases = yaml.safe_load(CASES_PATH.read_text())["cases"]
     return [c for c in cases if not only or c["id"] in only]
@@ -88,6 +92,7 @@ class CaseRun:
     final: str = ""
     steps: list[dict] = field(default_factory=list)
     error: str = ""
+    convo: object = None             # the chat, for its live activity
 
     def view(self) -> dict:
         c = self.case
@@ -95,6 +100,7 @@ class CaseRun:
                 "person": c.get("person", "piotr"), "prompt": c["prompt"], "status": self.status,
                 "conversation": self.conversation, "seconds": round(self.seconds, 1), "verdict": self.verdict,
                 "final": self.final[:400], "error": self.error,
+                "live": self.convo.live_view() if self.convo is not None else None,
                 "steps": [{"name": s["name"], "decision": s["decision"], "plain": s.get("plain") or s.get("effect", "")}
                           for s in self.steps]}
 
@@ -134,16 +140,23 @@ async def execute(rt, run: TestRun) -> TestRun:
     people = {p.id: p for p in rt.policy.people}
     usd0 = rt.totals["usd"]
 
+    # Every chat exists from the start, marked as waiting, so the whole queue is visible.
+    for cr in run.runs:
+        case = cr.case
+        c = rt.make_conversation(people[case.get("person", "piotr")], run.model, new_store(), StateStore(":memory:"),
+                                 test=run.id, enabled=run.layer, extra_overrides=case.get("policy"))
+        c.status, c.activity = "queued", f"waiting for a free slot ({run.concurrency} run at a time)"
+        c.thread.append({"role": "you", "text": case["prompt"], "queued": True})
+        rt.convos[c.id] = c
+        cr.convo, cr.conversation = c, c.id
+
     async def one(cr: CaseRun) -> None:
         async with sem:
             cr.status = "running"
             t0 = time.time()
-            case = cr.case
+            case, c = cr.case, cr.convo
+            c.thread.clear()   # run_turn adds the prompt itself
             try:
-                c = rt.make_conversation(people[case.get("person", "piotr")], run.model, new_store(), StateStore(":memory:"),
-                                         test=run.id, enabled=run.layer, extra_overrides=case.get("policy"))
-                rt.convos[c.id] = c
-                cr.conversation = c.id
                 async for ev in run_turn(rt, c, case["prompt"]):
                     run.usd = rt.totals["usd"] - usd0   # live, for the page
                     if ev["type"] == "step":
@@ -162,7 +175,18 @@ async def execute(rt, run: TestRun) -> TestRun:
 
     await asyncio.gather(*(one(r) for r in run.runs))
     run.finished = time.time()
+    save(run)
     return run
+
+
+def save(run: TestRun) -> Path | None:
+    """Keep every full run (all cases) for the Benchmark page: results/live/<time>_<on|off>.json."""
+    if len(run.runs) != len(load_cases()):
+        return None   # a partial run (--only) is not a benchmark
+    out = ROOT / "results" / "live" / f"{time.strftime('%Y%m%d-%H%M%S')}_{slug(run.model)}_{'on' if run.layer else 'off'}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(run.view(), indent=1, default=str))
+    return out
 
 
 def _cli() -> None:

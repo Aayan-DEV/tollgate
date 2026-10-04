@@ -2,7 +2,8 @@
 import { icon, esc, personMark, popup, eur } from "./ui.js";
 import { api } from "./api.js";
 
-const VIEWS = { agent: ["Agent", "agent"], layer: ["The layer", "shield"], data: ["Data", "database"], tests: ["Tests", "algorithm"], evidence: ["Evidence", "audit"] };
+const VIEWS = { agent: ["Agent", "agent"], layer: ["The layer", "shield"], how: ["How it works", "layers"], data: ["Data", "database"], tests: ["Tests", "algorithm"], benchmark: ["Benchmark", "analytics"], evidence: ["Evidence", "audit"] };
+const PAGES = { ...VIEWS, config: ["Configuration", "settings"] };   // reached from the settings button, not the rail
 
 export function renderShell(S, actions) {
   const st = S.state;
@@ -38,8 +39,9 @@ export function renderShell(S, actions) {
     </div>`;
 
   document.getElementById("topbar").innerHTML = `
-    <div class="crumbs"><span>Nordwind Finance Center</span>${icon("chevron")}<b>${VIEWS[S.view][0]}</b></div>
+    <div class="crumbs"><span>Nordwind Finance Center</span>${icon("chevron")}<b>${PAGES[S.view][0]}</b></div>
     <div class="tb-right">
+      <a class="tb-gear${S.view === "config" ? " is-on" : ""}" href="#config" title="Configuration files" aria-label="Configuration files">${icon("settings")}</a>
       <span class="tb-state${on ? "" : " is-off"}">${icon(on ? "shield" : "unlock")}${on ? "Layer on" : "Layer off: no checks"}</span>
       <button class="tb-who" id="who" aria-haspopup="menu" aria-expanded="false" title="Who the agent acts for">
         ${personMark(p.id)}
@@ -71,7 +73,7 @@ export function renderShell(S, actions) {
 // ---------------- the model picker: cloud models are always ready; local ones must be started first ----------------
 const LOCAL_SUB = {
   ready: (m) => `Ready, in memory${m.gb ? ` (${m.gb} GB)` : ""} · Ollama, on this machine`,
-  stopped: () => "Not started. Start loads it into memory (about 5 GB), then you can pick it.",
+  stopped: () => "Not started. Start loads it into memory, then you can pick it.",
   loading: (m) => `Starting… ${m.seconds || 0} s (loading into memory, with the injection screen model)`,
   no_server: () => "Ollama is not running. Start launches it, then loads the model.",
   missing: (m) => `Not installed. In a terminal: ${m.hint}`,
@@ -87,7 +89,7 @@ function modelMenu(list, current) {
       : ready && m.id !== current ? `<button class="key is-small is-quiet" data-stop="${m.id}">Stop</button>` : "";
     return `<div class="menu-row${ready ? "" : " is-disabled"}" role="menuitem" ${ready ? `data-pick="${m.id}" tabindex="0"` : 'aria-disabled="true"'}>
       <span class="rl-box">${icon(m.kind === "cloud" ? "sparkles" : "model")}</span>
-      <span class="mr-words"><span class="mr-title">${esc(m.name)}</span><span class="mr-sub">${esc(sub)}</span>
+      <span class="mr-words"><span class="mr-title">${esc(m.name)}${m.best ? ` <span class="chip is-good">best local</span>` : ""}</span><span class="mr-sub">${esc(sub)}</span>
         ${m.error ? `<span class="mr-sub mr-err">${esc(m.error)}</span>` : ""}</span>
       ${btn}${m.id === current ? `<span class="mr-tick">${icon("check")}</span>` : ""}
     </div>`;

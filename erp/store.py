@@ -31,11 +31,14 @@ TOOL_SCHEMAS = [
      "parameters": {"type": "object", "properties": {}}},
     {"name": "read_invoice", "description": "Read the full text of an invoice document exactly as it was received from the supplier.",
      "parameters": {"type": "object", "properties": {"invoice_id": {"type": "string"}}, "required": ["invoice_id"]}},
-    {"name": "list_vendors", "description": "List all vendors in the vendor master data.",
-     "parameters": {"type": "object", "properties": {}}},
-    {"name": "get_vendor", "description": "Get vendor master data for one vendor, including the verified bank account (IBAN) on file.",
+    {"name": "list_vendors", "description": "List vendors in the vendor master data. Pass part of a name or id in search to find "
+                                            "one vendor; leave it out to list all of them.",
+     "parameters": {"type": "object", "properties": {"search": {"type": "string"}}}},
+    {"name": "get_vendor", "description": "Get vendor master data for one vendor (by vendor id or name), including the verified "
+                                          "bank account (IBAN) on file.",
      "parameters": {"type": "object", "properties": {"vendor_id": {"type": "string"}}, "required": ["vendor_id"]}},
-    {"name": "get_payment_history", "description": "List the most recent payments (completed and in flight) made to a vendor.",
+    {"name": "get_payment_history", "description": "List the most recent payments (completed and in flight) made to a vendor "
+                                                   "(by vendor id or name).",
      "parameters": {"type": "object", "properties": {"vendor_id": {"type": "string"}}, "required": ["vendor_id"]}},
     {"name": "query_db", "description": "Run a read-only SQL query (SQLite) against the finance database. "
                                         "Tables: vendors, invoices, invoice_lines, payments, purchase_orders, goods_receipts, "
@@ -61,6 +64,9 @@ class ApStore:
     def __init__(self, fixture: dict, base_db: Path = DB_PATH):
         self.db = sqlite3.connect(":memory:", check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        if not base_db.exists():   # first run on a fresh clone: build the synthetic company database once
+            from erp.seed import build
+            build()
         src = sqlite3.connect(base_db)
         src.backup(self.db)
         src.close()
@@ -92,10 +98,13 @@ class ApStore:
         for inv in fixture.get("invoices", []):
             self.db.execute(
                 "INSERT INTO main.invoices (invoice_id, entity_id, vendor_id, vendor_name, issue_date, due_date, currency,"
-                " amount, status, document, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                " amount, status, document, created_at, approved_by, approved_at, three_way_match)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (inv["invoice_id"], inv.get("entity_id", "PL01"), inv["vendor_id"], inv["vendor_name"], "2026-09-25",
                  inv.get("due_date", "2026-10-05"), "EUR", inv["amount"], inv.get("status", "approved"), inv["document"],
-                 TODAY.isoformat()))
+                 TODAY.isoformat(),
+                 # an approved invoice records who approved it, like every approved invoice in the seed data
+                 *(("Anna Nowak", "2026-10-01", "matched") if inv.get("status", "approved") == "approved" else (None, None, None))))
         for p in fixture.get("history", []):
             self.db.execute(
                 "INSERT INTO main.payments (payment_id, entity_id, invoice_id, vendor_id, amount_eur, currency, iban, status, date,"
@@ -148,16 +157,28 @@ class ApStore:
         inv = self.invoice(str(invoice_id))
         return {"invoice_id": invoice_id, "document": inv["document"]} if inv else {"error": f"Invoice {invoice_id} not found"}
 
-    def t_list_vendors(self):
-        return [dict(r) for r in self.db.execute("SELECT vendor_id, name, country, iban, contact_email FROM main.vendors")]
+    def t_list_vendors(self, search=None):
+        sql, args = "SELECT vendor_id, name, country, iban, contact_email FROM main.vendors", ()
+        if search:
+            sql, args = sql + " WHERE vendor_id LIKE ? OR name LIKE ?", (f"%{search}%",) * 2
+        return [dict(r) for r in self.db.execute(sql, args)]
+
+    def vendor_id_for(self, ref) -> str:
+        """An exact vendor id, or the one vendor whose name contains ref (agents often have only the name)."""
+        ref = str(ref or "").strip()
+        if self.db.execute("SELECT 1 FROM main.vendors WHERE vendor_id = ?", (ref,)).fetchone():
+            return ref
+        hits = self.db.execute("SELECT vendor_id FROM main.vendors WHERE name LIKE ?", (f"%{ref}%",)).fetchall() if ref else []
+        return hits[0][0] if len(hits) == 1 else ref
 
     def t_get_vendor(self, vendor_id):
+        vid = self.vendor_id_for(vendor_id)
         r = self.db.execute("SELECT vendor_id, name, country, iban, contact_email, payment_terms_days, risk_rating "
-                            "FROM main.vendors WHERE vendor_id = ?", (str(vendor_id),)).fetchone()
+                            "FROM main.vendors WHERE vendor_id = ?", (vid,)).fetchone()
         return dict(r) if r else {"error": f"Vendor {vendor_id} not found in master data"}
 
     def t_get_payment_history(self, vendor_id):
-        return self.payments_for(str(vendor_id), limit=10)
+        return self.payments_for(self.vendor_id_for(vendor_id), limit=10)
 
     def t_query_db(self, sql):
         before = self.db.total_changes

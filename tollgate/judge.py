@@ -72,7 +72,8 @@ class Judge:
         except Exception as err:  # timeout, transport, bad JSON
             return {"decision": Decision(cfg.on_error), "reason": f"judge unavailable ({type(err).__name__}); fail mode {cfg.on_error}",
                     "quote": "", "quote_ok": False, "model": model, "ms": 0.0, "tokens": (0, 0)}
-        quote = str(answer.get("quote", "")).strip()
+        # Small models often copy the message label too ("[U1] Please pay..."); the label is ours, not the user's words.
+        quote = re.sub(r"^\s*\[?U\d+\]?[:\s]*", "", str(answer.get("quote", ""))).strip().strip('"')
         source = next((t.label for t in ledger.user_turns if _norm(quote) and _norm(quote) in _norm(t.text)), None)
         quote_ok = source is not None and len(_norm(quote).split()) >= cfg.min_quote_words
         said = str(answer.get("decision", "ask"))

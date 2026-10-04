@@ -2,9 +2,20 @@
 
 from __future__ import annotations
 
+import os
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
+
+# Who to tell when a model call is slow or retried (the dashboard shows it on the chat). One per asyncio task.
+ACTIVITY: ContextVar[Callable[[str], None] | None] = ContextVar("tollgate_activity", default=None)
+
+
+def note(text: str) -> None:
+    fn = ACTIVITY.get()
+    if fn:
+        fn(text)
 
 
 @dataclass
@@ -37,7 +48,7 @@ def provider_of(model: str) -> str:
 
 
 def load_env(path: str | Path = ".env") -> dict[str, str]:
-    env: dict[str, str] = {}
+    env: dict[str, str] = {k: v for k, v in os.environ.items() if k.isupper()}   # hosted: settings come from the environment
     p = Path(path)
     if not p.exists():
         return env

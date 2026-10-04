@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1920">
+<title>Tollgate Deck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* Panlytics design law: Inter, black and white, warm hairlines, 8 px grid, squircle corners.
+   Each page is a landing-page section: a warm noise gradient, strong type, panels like the dashboard. */
+:root {
+  --ink: #17171a; --ink-2: #45454e; --ink-3: #68686f;
+  --paper: #ffffff; --ground: #f4f3f0; --surface-2: #f9f8f6; --surface-3: #f1f0ec; --sunken: #ecebe7; --line: #e6e4df;
+  --good: #1e6b47; --good-tint: #eaf1ed; --bad: #9a3128; --bad-tint: #f7edeb; --warn: #7a5310; --warn-tint: #f5f0e6;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --noise: url("noise.png");
+  --shadow-shot: 0 60px 120px -60px rgb(70 50 30 / 0.45), 0 24px 48px -32px rgb(23 23 26 / 0.28), 0 2px 4px rgb(23 23 26 / 0.04);
+  --shadow-card: 0 24px 48px -36px rgb(70 50 30 / 0.35), 0 1px 2px rgb(23 23 26 / 0.05);
+}
+@page { size: 1920px 1080px; margin: 0; }
+* { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+html, body { margin: 0; background: #fff; }
+body { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; color: var(--ink); -webkit-font-smoothing: antialiased;
+  font-feature-settings: "cv11", "ss01"; letter-spacing: -0.011em; }
+p { margin: 0; }
+b { font-weight: 600; color: var(--ink); }
+code, .mono { font-family: var(--mono); font-size: 0.9em; letter-spacing: -0.01em; }
+code { background: rgb(23 23 26 / 0.05); padding: 1px 7px; border-radius: 6px; }
+
+.ic { width: 1em; height: 1em; flex: none; display: block; }
+
+/* ---------- the page ---------- */
+.page { width: 1920px; height: 1080px; position: relative; overflow: hidden; break-after: page; page-break-after: always;
+  padding: 80px 96px; display: flex; flex-direction: column; background-color: #f7f6f3; }
+.page:last-child { break-after: auto; page-break-after: auto; }
+.page > * { position: relative; z-index: 1; }
+
+/* warm mesh gradients, a different weather per page; the grain is the top background layer */
+.g1 { background-image: var(--noise),
+  radial-gradient(1200px 900px at 92% 8%, rgb(240 196 158 / 0.75), transparent 62%),
+  radial-gradient(1000px 800px at 62% 110%, rgb(205 222 207 / 0.85), transparent 60%),
+  radial-gradient(900px 700px at 0% 0%, rgb(255 255 255 / 0.9), transparent 65%),
+  linear-gradient(135deg, #f8f6f1, #efe9df); }
+.g2 { background-image: var(--noise),
+  radial-gradient(1100px 800px at 100% 100%, rgb(232 186 172 / 0.6), transparent 62%),
+  radial-gradient(900px 700px at 10% 0%, rgb(236 222 196 / 0.8), transparent 60%),
+  linear-gradient(160deg, #f8f6f2, #f1ece5); }
+.g3 { background-image: var(--noise),
+  radial-gradient(1100px 760px at 50% -10%, rgb(214 226 216 / 0.9), transparent 60%),
+  radial-gradient(900px 700px at 100% 100%, rgb(240 210 176 / 0.6), transparent 60%),
+  radial-gradient(800px 600px at 0% 90%, rgb(222 224 234 / 0.8), transparent 60%),
+  linear-gradient(180deg, #f8f7f3, #f2efe9); }
+.g4 { background-image: var(--noise),
+  radial-gradient(1200px 800px at 0% 0%, rgb(242 214 186 / 0.75), transparent 60%),
+  radial-gradient(1000px 800px at 100% 80%, rgb(208 224 212 / 0.8), transparent 62%),
+  linear-gradient(135deg, #f8f6f2, #f0ece4); }
+.g5 { background-image: var(--noise),
+  radial-gradient(1000px 800px at 100% 0%, rgb(220 224 236 / 0.9), transparent 60%),
+  radial-gradient(1100px 800px at 0% 100%, rgb(240 206 180 / 0.6), transparent 62%),
+  linear-gradient(160deg, #f8f7f4, #efede8); }
+.g6 { background-image: var(--noise),
+  radial-gradient(1300px 900px at 80% 110%, rgb(240 196 158 / 0.7), transparent 62%),
+  radial-gradient(1000px 800px at 10% -10%, rgb(210 226 214 / 0.9), transparent 60%),
+  radial-gradient(700px 500px at 100% 0%, rgb(232 222 240 / 0.6), transparent 60%),
+  linear-gradient(135deg, #f7f5f0, #ede7dc); }
+
+/* ---------- type ---------- */
+.eyebrow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.tag-sec { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px 0 14px; border-radius: 999px;
+  background: rgb(255 255 255 / 0.7); border: 1px solid rgb(23 23 26 / 0.08); font-size: 19px; font-weight: 600; color: var(--ink-2);
+  box-shadow: 0 1px 2px rgb(23 23 26 / 0.04); }
+.tag-sec .ic { font-size: 22px; color: var(--ink); }
+.crit { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px 0 16px; border-radius: 999px;
+  background: rgb(23 23 26 / 0.05); font-size: 18px; font-weight: 500; color: var(--ink-3); }
+.crit .ic { font-size: 19px; }
+.crit b { display: inline-flex; align-items: center; height: 32px; padding: 0 14px; border-radius: 999px; background: var(--ink);
+  color: #fff; font-size: 17px; font-weight: 600; letter-spacing: 0; }
+h1 { font-size: 68px; line-height: 1.04; letter-spacing: -0.035em; font-weight: 700; margin: 28px 0 0; max-width: 1560px; text-wrap: balance; }
+h1 .soft { color: var(--ink-3); }
+.lead { font-size: 26px; line-height: 1.5; color: var(--ink-2); margin-top: 24px; max-width: 1200px; text-wrap: pretty; }
+.small { font-size: 18px; line-height: 1.5; color: var(--ink-3); }
+
+/* ---------- logo: the shield and the word, nothing else ---------- */
+.brand { display: inline-flex; align-items: center; gap: 12px; font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+.brand .ic { font-size: 36px; }
+
+/* ---------- panels, like the dashboard ---------- */
+.pn { background: rgb(255 255 255 / 0.92); border: 1px solid var(--line); border-radius: 20px; corner-shape: squircle; overflow: hidden;
+  box-shadow: var(--shadow-card); display: flex; flex-direction: column; min-height: 0; }
+.pn-head { display: flex; align-items: center; gap: 14px; min-height: 68px; padding: 12px 22px; border-bottom: 1px solid var(--line); background: var(--surface-2); flex: none; }
+.chipbox { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: 10px; corner-shape: squircle;
+  background: #fff; border: 1px solid var(--line); color: var(--ink); }
+.chipbox .ic { font-size: 22px; }
+.pn-title { font-size: 22px; font-weight: 600; letter-spacing: -0.018em; white-space: nowrap; }
+.pn-hint { font-size: 17px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pn-right { margin-left: auto; flex: none; display: flex; gap: 8px; align-items: center; }
+.pn-body { padding: 22px; }
+.rows { list-style: none; margin: 0; padding: 0; }
+.row { display: flex; gap: 14px; align-items: flex-start; padding: 16px 22px; border-top: 1px solid var(--line); font-size: 19px; line-height: 1.45; color: var(--ink-2); }
+.row:first-child { border-top: 0; }
+.row > .ic { font-size: 22px; color: var(--ink-3); margin-top: 2px; }
+.row.is-good { background: var(--good-tint); } .row.is-good > .ic, .row.is-good b { color: var(--good); }
+.row.is-warn { background: var(--warn-tint); } .row.is-warn > .ic, .row.is-warn b { color: var(--warn); }
+.row.is-bad { background: var(--bad-tint); } .row.is-bad > .ic, .row.is-bad b { color: var(--bad); }
+
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--line); background: #fff; color: var(--ink-2); white-space: nowrap; corner-shape: squircle; }
+.chip .ic { font-size: 16px; }
+.chip.is-good { color: var(--good); background: var(--good-tint); border-color: transparent; }
+.chip.is-warn { color: var(--warn); background: var(--warn-tint); border-color: transparent; }
+.chip.is-bad { color: var(--bad); background: var(--bad-tint); border-color: transparent; }
+.chip.is-off { color: var(--ink-2); background: var(--surface-3); border-color: transparent; }
+.chip.is-ink { color: #fff; background: var(--ink); border-color: transparent; }
+
+/* figures, like .pn-figs */
+.figs { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); }
+.fig { padding: 22px 26px 24px; border-left: 1px solid var(--line); min-width: 0; }
+.fig:first-child { border-left: 0; }
+.fig-k { display: flex; align-items: center; gap: 8px; font-size: 17px; font-weight: 600; color: var(--ink-3); }
+.fig-k .ic { font-size: 19px; }
+.fig-v { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-size: 52px; font-weight: 600; letter-spacing: -0.035em; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+.fig-v .to { font-size: 26px; color: var(--ink-3); transform: rotate(-90deg); }
+.fig-s { margin-top: 10px; font-size: 16px; color: var(--ink-3); line-height: 1.4; }
+.good { color: var(--good); } .bad { color: var(--bad); } .warn { color: var(--warn); }
+
+/* icon bullets */
+.pts { list-style: none; margin: 0; padding: 0; display: grid; gap: 22px; align-content: start; }
+.pt { display: grid; grid-template-columns: 48px 1fr; gap: 18px; align-items: start; font-size: 22px; line-height: 1.45; color: var(--ink-2); }
+.pt .chipbox { width: 48px; height: 48px; border-radius: 12px; box-shadow: 0 1px 2px rgb(23 23 26 / 0.05); }
+.pt .chipbox .ic { font-size: 24px; }
+.pt p { padding-top: 8px; }
+
+/* ---------- product shots ---------- */
+.shot { position: relative; padding: 10px; border-radius: 26px; corner-shape: squircle; background: rgb(255 255 255 / 0.55);
+  border: 1px solid rgb(23 23 26 / 0.07); box-shadow: var(--shadow-shot); min-height: 0; }
+.win { position: relative; height: 100%; border-radius: 17px; corner-shape: squircle; overflow: hidden; border: 1px solid var(--line); background: #fff; }
+.win > img { position: absolute; left: 0; top: 0; display: block;
+  width: calc(var(--z, 1) * 100%);
+  margin-left: calc(-1 * var(--x, 0) * var(--z, 1) * 100%);
+  margin-top: calc(-1 * var(--y, 0) * var(--z, 1) * var(--ar, 0.625) * 100%); }
+.cap { display: flex; gap: 12px; align-items: flex-start; font-size: 18px; line-height: 1.5; color: var(--ink-3); }
+.cap .ic { font-size: 20px; margin-top: 3px; color: var(--ink-2); }
+
+/* ---------- 1. title ---------- */
+.p1 .left { width: 780px; display: flex; flex-direction: column; height: 100%; }
+.p1 .hero { font-size: 104px; line-height: 0.98; letter-spacing: -0.045em; margin-top: auto; }
+.p1 .lead { font-size: 28px; margin-top: 32px; }
+.p1 .lead b { color: var(--ink); }
+.p1 .badges { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 40px; max-width: 640px; }
+.p1 .badges .chip { height: 42px; font-size: 18px; padding: 0 16px; background: rgb(255 255 255 / 0.7); }
+.p1 .badges .chip .ic { font-size: 19px; }
+.p1 .demo { margin-top: auto; display: flex; gap: 14px; align-items: flex-start; max-width: 720px; }
+.p1 .stage { position: absolute; left: 960px; top: 112px; width: 1440px; height: 900px; z-index: 0; }
+.p1 .stage .shot { width: 100%; height: 100%; }
+.p1 .float { position: absolute; z-index: 2; left: 820px; bottom: 72px; width: 560px; box-shadow: 0 50px 100px -40px rgb(60 40 20 / 0.5), 0 2px 6px rgb(23 23 26 / 0.08); }
+.p1 .float .row { font-size: 18px; }
+
+/* ---------- 2. problem ---------- */
+.p2 .body { display: grid; grid-template-columns: 1fr 820px; gap: 72px; margin-top: 56px; flex: 1; min-height: 0; align-items: center; }
+.p2 .huge { font-size: 168px; font-weight: 700; letter-spacing: -0.06em; line-height: 0.9; }
+.p2 .huge span { color: var(--ink-3); font-weight: 500; font-size: 0.3em; letter-spacing: -0.025em; margin-left: 24px; }
+.sq { display: grid; grid-template-columns: repeat(21, 1fr); gap: 7px; margin-top: 28px; }
+.sq i { aspect-ratio: 1; border-radius: 6px; background: var(--sunken); border: 1px solid var(--line); corner-shape: squircle; }
+.sq i.h { background: var(--bad); border-color: var(--bad); }
+.legend { display: flex; gap: 20px; margin-top: 14px; font-size: 15px; color: var(--ink-3); align-items: center; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+/* ---------- 3. solution ---------- */
+.flow { display: grid; grid-template-columns: 1fr 56px 1.85fr 56px 1fr; align-items: stretch; margin-top: 56px; }
+.flow .arrow { display: grid; place-items: center; color: var(--ink-3); }
+.flow .arrow span { width: 40px; height: 40px; border-radius: 999px; background: #fff; border: 1px solid var(--line); display: grid; place-items: center;
+  transform: rotate(-90deg); box-shadow: 0 1px 2px rgb(23 23 26 / 0.05); }
+.flow .arrow .ic { font-size: 20px; }
+.flow .row { padding: 11px 22px; font-size: 18px; align-items: center; }
+.flow .row > .ic { margin-top: 0; font-size: 20px; }
+.gate { border-color: var(--ink); box-shadow: 0 40px 80px -40px rgb(23 23 26 / 0.45); }
+.gate .pn-head { background: var(--ink); color: #fff; border-bottom-color: var(--ink); }
+.gate .pn-head .chipbox { background: rgb(255 255 255 / 0.1); border-color: rgb(255 255 255 / 0.16); color: #fff; }
+.gate .pn-hint { color: #b9b8b2; }
+.stages { display: flex; flex-wrap: wrap; gap: 10px; padding: 22px; align-content: center; flex: 1; }
+.stages .chip { height: 40px; font-size: 17px; padding: 0 14px 0 10px; background: var(--surface-2); }
+.stages .chip .ic { font-size: 18px; color: var(--ink-3); }
+.stages .chip.ai { background: var(--warn-tint); color: var(--warn); border-color: transparent; }
+.stages .chip.ai .ic { color: var(--warn); }
+.p3 .bottom { display: grid; grid-template-columns: repeat(3, 1fr) 1.15fr; gap: 24px; margin-top: 32px; flex: 1; min-height: 0; }
+.feat { padding: 28px; display: flex; flex-direction: column; }
+.feat h3 { margin-top: auto !important; }
+.feat h3 { margin: 18px 0 0; font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 600; }
+.feat p { margin-top: 14px; font-size: 20.5px; line-height: 1.5; color: var(--ink-2); }
+.feat .chipbox { width: 48px; height: 48px; border-radius: 12px; }
+.feat .chipbox .ic { font-size: 24px; }
+.p3 .outc .row { padding: 15px 22px; font-size: 17px; }
+.p3 .outc .row b { font-size: 19px; display: block; }
+
+/* ---------- 4. robust ---------- */
+.p4 .figs-pn { margin-top: 40px; }
+.p4 .body { display: grid; grid-template-columns: 1fr 980px; gap: 64px; margin-top: 40px; flex: 1; min-height: 0; }
+.p4 .pts { gap: 18px; }
+.p4 .pt { font-size: 20.5px; }
+.p4 .pt .chipbox { width: 44px; height: 44px; } .p4 .pt { grid-template-columns: 44px 1fr; }
+.p4 .pt p { padding-top: 6px; }
+.p4 .shot { margin-right: -200px; margin-bottom: -140px; }
+
+/* ---------- 5. controls ---------- */
+.p5 .body { display: grid; grid-template-columns: 1fr 600px; gap: 48px; margin-top: 40px; flex: 1; min-height: 0; }
+.ctls { display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 14px; }
+.ctl { background: rgb(255 255 255 / 0.9); border: 1px solid var(--line); border-radius: 16px; corner-shape: squircle; padding: 16px 20px;
+  display: grid; grid-template-columns: 40px 1fr; gap: 4px 16px; box-shadow: 0 1px 2px rgb(23 23 26 / 0.04); }
+.ctl .chipbox { grid-row: span 2; background: var(--surface-2); }
+.ctl .t { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 600; letter-spacing: -0.015em; }
+.ctl .t .chip { height: 24px; font-size: 13px; padding: 0 9px; }
+.ctl p { font-size: 16px; line-height: 1.42; color: var(--ink-2); }
+.p5 .right { display: flex; flex-direction: column; gap: 20px; min-height: 0; }
+.p5 .right .shot { flex: 1; }
+
+/* ---------- 6. architecture ---------- */
+.p6 .body { display: grid; grid-template-columns: 1fr 890px; gap: 56px; margin-top: 40px; flex: 1; min-height: 0; }
+.p6 .left { display: flex; flex-direction: column; gap: 28px; min-height: 0; }
+.p6 .pt { font-size: 19.5px; grid-template-columns: 44px 1fr; gap: 16px; }
+.p6 .pt .chipbox { width: 44px; height: 44px; }
+.p6 .pt p { padding-top: 6px; }
+.p6 .pts { gap: 16px; }
+.p6 .shot { align-self: start; }
+.p6 .win img { position: static; width: 100%; margin: 0; }
+
+/* ---------- 7. security ---------- */
+.p7 .body { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; flex: 1; min-height: 0; }
+.p7 .pn .win { border: 0; border-radius: 0; border-bottom: 1px solid var(--line); flex: 1; }
+.p7 .row { padding: 13px 22px; font-size: 18.5px; }
+
+/* ---------- 8. tests ---------- */
+.p8 .body { display: grid; grid-template-columns: 720px 1fr; gap: 56px; margin-top: 40px; flex: 1; min-height: 0; }
+.p8 .tests { display: flex; flex-direction: column; gap: 18px; }
+.tcard { display: grid; grid-template-columns: 160px 1fr; gap: 24px; padding: 28px 30px; align-items: start; }
+.tcard .n { font-size: 84px; font-weight: 700; letter-spacing: -0.05em; line-height: 0.9; }
+.tcard .n small { display: block; font-size: 15px; letter-spacing: 0; font-weight: 600; color: var(--ink-3); margin-top: 10px; }
+.tcard h3 { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 23px; letter-spacing: -0.02em; font-weight: 600; flex-wrap: wrap; }
+.tcard p { margin-top: 10px; font-size: 19.5px; line-height: 1.5; color: var(--ink-2); }
+.p8 .shot { margin-right: -180px; margin-bottom: -140px; }
+
+/* ---------- 9. practical ---------- */
+.p9 .body { display: grid; grid-template-columns: 1fr 720px; gap: 48px; margin-top: 40px; flex: 1; min-height: 0; }
+.p9 .left { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: auto 1fr; gap: 20px; min-height: 0; }
+.p9 .row { padding: 15px 22px; font-size: 18.5px; }
+.p9 .row b { display: block; font-size: 19px; }
+.p9 .tiles { grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.tile { display: grid; grid-template-columns: 40px 1fr; gap: 16px; padding: 18px 22px; align-items: start; }
+.tile p { font-size: 19px; line-height: 1.45; color: var(--ink-2); padding-top: 2px; }
+.p9 .shot { margin-right: -200px; margin-bottom: -140px; }
+
+/* ---------- 10. try it ---------- */
+.p10 .top { display: flex; align-items: center; justify-content: space-between; }
+.p10 .body { display: grid; grid-template-columns: 1fr 760px; gap: 64px; margin-top: 48px; flex: 1; min-height: 0; }
+.term { background: #17171a; color: #f4f3f0; border-radius: 22px; corner-shape: squircle; overflow: hidden; box-shadow: var(--shadow-shot); border: 1px solid #000; }
+.term-bar { display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 20px; border-bottom: 1px solid rgb(255 255 255 / 0.08); color: #8f8e88; font-size: 16px; }
+.term-bar i { width: 12px; height: 12px; border-radius: 99px; background: #3a3a3f; }
+.term-bar span { margin-left: 12px; font-family: var(--mono); }
+.term pre { margin: 0; padding: 26px 30px 30px; font-family: var(--mono); font-size: 25px; line-height: 1.65; white-space: pre-wrap; }
+.term .c { color: #8f8e88; } .term .p { color: #7fc29b; }
+.repo { display: inline-flex; align-items: center; gap: 14px; margin-top: 28px; height: 64px; padding: 0 26px 0 20px; border-radius: 18px;
+  corner-shape: squircle; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow-card); font-size: 26px; font-weight: 600; }
+.repo .ic { font-size: 26px; }
+.p10 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; align-content: start; }
+.stat { padding: 26px 28px; }
+.stat .fig-v { font-size: 56px; }
+</style>
+</head>
+<body>
+
+<!-- 1. Title -->
+<section class="page p1 g1">
+  <div class="left">
+    <div class="brand">{{i:shield}}<span>Tollgate</span></div>
+    <h1 class="hero">The one gate every AI agent action passes.</h1>
+    <p class="lead">A control layer that checks what an AI action would <b>really do</b> in the company's systems, before it runs.</p>
+    <div class="badges">
+      <span class="chip">{{i:sparkles}} HackYeah 2026</span>
+      <span class="chip">{{i:layers}} AI Control Layer challenge</span>
+      <span class="chip">{{i:model}} Runs fully local on Ollama</span>
+    </div>
+    <div class="demo cap" style="margin-top:auto">{{i:building}}<p>Demo company: <b>Nordwind Finance Center</b>, an accounts payable team with an AI agent that pays invoices, sends email and queries the finance database.</p></div>
+  </div>
+  <div class="stage"><div class="shot"><div class="win"><img src="shots_jpg/agent.jpg" alt="Tollgate dashboard: a duplicate payment held for a person"></div></div></div>
+  <div class="float pn">
+    <div class="pn-head"><span class="chipbox">{{i:hand}}</span><span class="pn-title">Waiting for a person</span><span class="pn-right"><span class="chip is-warn">{{i:clock}} held</span></span></div>
+    <ul class="rows">
+      <li class="row">{{i:invoice}}<p><b>Pay 2,350.00 EUR to Krakow Logistics S.A.</b> for invoice INV-7003-R.</p></li>
+      <li class="row is-warn">{{i:warning}}<p>We paid this supplier the same amount a few days ago. It looks like the same bill sent twice, so a person checks.</p></li>
+    </ul>
+  </div>
+</section>
+
+<!-- 2. Problem -->
+<section class="page p2 g2">
+  <div class="eyebrow"><span class="tag-sec">{{i:warning}} The problem</span></div>
+  <h1>AI agents now act. Text filters cannot see what an action <span class="soft">really does.</span></h1>
+  <div class="body">
+    <ul class="pts" style="gap:30px;margin-top:8px">
+      <li class="pt"><span class="chipbox">{{i:agent}}</span><p><b>Agents hold real power.</b> They pay invoices, send email, run SQL, open files and call MCP tools.</p></li>
+      <li class="pt"><span class="chipbox">{{i:file}}</span><p><b>The words can lie.</b> An invoice can carry a hidden instruction, a "new" bank account or fake urgency from "the CEO".</p></li>
+      <li class="pt"><span class="chipbox">{{i:bank}}</span><p><b>The danger is in the effect.</b> "Pay INV-7001" looks harmless. What matters is which account the money goes to.</p></li>
+      <li class="pt"><span class="chipbox">{{i:reload}}</span><p><b>Agents are non-deterministic.</b> Loops, runaway spend and wrong guesses happen without any attacker.</p></li>
+    </ul>
+    <div class="pn">
+      <div class="pn-head"><span class="chipbox">{{i:analytics}}</span><span class="pn-title">Gemini 2.5 Flash, no layer</span><span class="pn-hint">21 risky but realistic requests</span></div>
+      <div class="pn-body" style="padding:32px 32px 28px">
+        <div class="huge bad">9<span>of 21 ended in harm</span></div>
+        <div class="sq"><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i class="h"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="legend"><span><i style="background:var(--bad)"></i>harm done</span><span><i style="background:var(--sunken);border:1px solid var(--line)"></i>no harm</span></div>
+        <p style="font-size:21px;line-height:1.5;color:var(--ink-2);margin-top:24px">Wrong bank account, the same bill paid twice, salaries read, national IDs exposed and a booby-trapped file opened.</p>
+      </div>
+      <ul class="rows" style="border-top:1px solid var(--line)">
+        <li class="row" style="background:var(--surface-2)">{{i:model}}<p>The local model <b>qwen3:8b</b> did worse: 10 of 12 attack tests went through without the layer.</p></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 3. Solution -->
+<section class="page p3 g3">
+  <div class="eyebrow"><span class="tag-sec">{{i:shield}} The solution</span></div>
+  <h1>Put one gate between agents and systems. <span class="soft">The agent holds no keys.</span></h1>
+  <div class="flow">
+    <div class="pn">
+      <div class="pn-head"><span class="chipbox">{{i:agent}}</span><span class="pn-title">Agents</span></div>
+      <ul class="rows">
+        <li class="row">{{i:agent}}<p>Chat agent</p></li>
+        <li class="row">{{i:users}}<p>Helper agents</p></li>
+        <li class="row">{{i:flow}}<p>Any MCP client</p></li>
+      </ul>
+    </div>
+    <div class="arrow"><span>{{i:down}}</span></div>
+    <div class="pn gate">
+      <div class="pn-head"><span class="chipbox">{{i:shield}}</span><span class="pn-title">Tollgate</span><span class="pn-hint">every action, in this order</span></div>
+      <div class="stages">
+        <span class="chip">{{i:user}} Who is asking</span>
+        <span class="chip">{{i:warning}} Known-bad</span>
+        <span class="chip">{{i:search}} Real effect</span>
+        <span class="chip">{{i:table}} Rules</span>
+        <span class="chip ai">{{i:brain}} AI judge</span>
+        <span class="chip">{{i:hand}} Decide</span>
+        <span class="chip">{{i:lock}} Run safely</span>
+        <span class="chip ai">{{i:eye}} Screen</span>
+        <span class="chip">{{i:audit}} Record</span>
+      </div>
+    </div>
+    <div class="arrow"><span>{{i:down}}</span></div>
+    <div class="pn">
+      <div class="pn-head"><span class="chipbox">{{i:database}}</span><span class="pn-title">Systems</span></div>
+      <ul class="rows">
+        <li class="row">{{i:bank}}<p>ERP and payments</p></li>
+        <li class="row">{{i:mail}}<p>Email and files</p></li>
+        <li class="row">{{i:model}}<p>MCP tools and LLMs</p></li>
+      </ul>
+    </div>
+  </div>
+  <div class="bottom">
+    <div class="pn feat"><span class="chipbox">{{i:search}}</span><h3>Judge the effect, not the prompt</h3><p>Each action is resolved against the company's own records: the real invoice, the account on file and past payments.</p></div>
+    <div class="pn feat"><span class="chipbox">{{i:algorithm}}</span><h3>Rules decide, AI only tightens</h3><p>Fixed rules decide everything knowable in about 1 ms. AI is asked only where meaning matters, and it can only turn "allow" into "ask" or "block".</p></div>
+    <div class="pn feat"><span class="chipbox">{{i:settings}}</span><h3>Everything is configuration</h3><p>Policy, per-tool contracts and the attack feed are files. They are checked before they load, signed where it matters, and live within half a second.</p></div>
+    <div class="pn outc">
+      <div class="pn-head"><span class="chipbox">{{i:flow}}</span><span class="pn-title">Three outcomes</span></div>
+      <ul class="rows" style="flex:1;display:flex;flex-direction:column">
+        <li class="row is-good" style="flex:1">{{i:check}}<p><b>Allow</b>It matches the records and the rules.</p></li>
+        <li class="row is-warn" style="flex:1">{{i:hand}}<p><b>Ask a person</b>Unclear, over a limit, or irreversible and unproven.</p></li>
+        <li class="row is-bad" style="flex:1">{{i:stop}}<p><b>Block</b>Known bad, wrong account, or not allowed for this person.</p></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4. Robust (30%) -->
+<section class="page p4 g4">
+  <div class="eyebrow"><span class="tag-sec">{{i:shield}} How it is robust</span><span class="crit">{{i:analytics}} Robustness and quality of guardrails <b>30% of the score</b></span></div>
+  <h1>Same model, same prompt. <span class="soft">Only the layer changed.</span></h1>
+  <div class="pn figs-pn">
+    <div class="pn-head"><span class="chipbox">{{i:analytics}}</span><span class="pn-title">Benchmark</span><span class="pn-hint">Without the layer, then with Tollgate</span></div>
+    <div class="figs">
+      <div class="fig"><div class="fig-k">{{i:warning}} Harmful outcomes (Gemini)</div><div class="fig-v"><span class="bad">9</span><span class="to">{{i:down}}</span><span class="good">0</span></div><div class="fig-s">of 21 risky situations</div></div>
+      <div class="fig"><div class="fig-k">{{i:check}} Useful work still done</div><div class="fig-v"><span>93%</span><span class="to">{{i:down}}</span><span class="good">93%</span></div><div class="fig-s">the legitimate part of each request</div></div>
+      <div class="fig"><div class="fig-k">{{i:zap}} Live tests (Gemini)</div><div class="fig-v"><span class="bad">7</span><span class="to">{{i:down}}</span><span class="good">18</span></div><div class="fig-s">of 18, layer off, then on</div></div>
+      <div class="fig"><div class="fig-k">{{i:model}} Live tests (local qwen3:8b)</div><div class="fig-v"><span class="bad">6</span><span class="to">{{i:down}}</span><span class="good">18</span></div><div class="fig-s">of 18, layer off, then on</div></div>
+    </div>
+  </div>
+  <div class="body">
+    <ul class="pts">
+      <li class="pt"><span class="chipbox">{{i:lock}}</span><p><b>Fails closed.</b> If the AI judge errors or times out, the action waits for a person.</p></li>
+      <li class="pt"><span class="chipbox">{{i:filter}}</span><p><b>Strictest finding wins:</b> allow &lt; ask a person &lt; block. One block anywhere stops the action.</p></li>
+      <li class="pt"><span class="chipbox">{{i:database}}</span><p><b>Runs with verified values.</b> The payment uses the amount and account on file, re-checked inside one database transaction, so there is no gap between check and use.</p></li>
+      <li class="pt"><span class="chipbox">{{i:model}}</span><p><b>Safety does not depend on the model.</b> A weak local model fails useful tasks, never the safety checks.</p></li>
+      <li class="pt"><span class="chipbox">{{i:settings}}</span><p><b>Bad config cannot weaken it.</b> Invalid edits are rejected and the last good version stays.</p></li>
+    </ul>
+    <div class="shot"><div class="win"><img src="shots_jpg/benchmark.jpg" style="--x:0.16;--z:1.19;--y:0.075" alt="Benchmark page"></div></div>
+  </div>
+</section>
+
+<!-- 5. Quality of guardrails (30%) -->
+<section class="page p5 g5">
+  <div class="eyebrow"><span class="tag-sec">{{i:layers}} Quality of the guardrails</span><span class="crit">{{i:analytics}} Robustness and quality of guardrails <b>30% of the score</b></span></div>
+  <h1>Ten controls. <span class="soft">Rules first, AI where meaning matters.</span></h1>
+  <div class="body">
+    <div class="ctls">
+      <div class="ctl"><span class="chipbox">{{i:receipt}}</span><div class="t">Effect contracts <span class="chip is-off">rule</span></div><p>Per tool, in YAML: invoice exists, supplier on file, exact amount, account on file, not paid, duplicates and limits.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:brain}}</span><div class="t">AI judge quotes the user <span class="chip is-warn">AI</span></div><p>It must quote the user's own words, and the quote is checked character for character. No quote, no payment.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:database}}</span><div class="t">Data guard <span class="chip is-off">rule</span></div><p>Parses SQL, scopes rows and columns per role, masks IBANs and IDs, and caps bulk reads.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:sparkles}}</span><div class="t">Prompt injection cascade <span class="chip is-warn">AI</span></div><p>Rules first, then qwen3:0.6b screens unclear text and a bigger model confirms. The hidden sentence is removed.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:key}}</span><div class="t">Secrets detector <span class="chip is-off">rule</span></div><p>12 patterns (cloud keys, tokens, private keys) are blocked in messages and redacted in results.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:users}}</span><div class="t">Identity and delegation <span class="chip is-off">rule</span></div><p>Signed agent tokens (HMAC-SHA256). A helper agent can only get narrower rights.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:globe}}</span><div class="t">Known-bad feed <span class="chip is-off">rule</span></div><p>Signed attack signatures are fetched from a remote feed. Tampered feeds are rejected.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:package}}</span><div class="t">Unsafe files and MCP tools <span class="chip is-off">rule</span></div><p>A pickle scan blocks code execution. MCP tools are pinned by sha256 and changed tools are quarantined.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:coins}}</span><div class="t">Budgets and loops <span class="chip is-off">rule</span></div><p>USD, tokens, steps and compute seconds, for cloud and local models. Repeated calls are stopped.</p></div>
+      <div class="ctl"><span class="chipbox">{{i:eyeoff}}</span><div class="t">Privacy vault <span class="chip is-off">rule</span></div><p>Bank and personal data are tokenized before they reach a commercial model.</p></div>
+    </div>
+    <div class="right">
+      <div class="shot"><div class="win"><img src="shots_jpg/agent.jpg" style="--x:0.748;--z:4.08;--y:0.072" alt="The layer panel: a duplicate payment held for approval"></div></div>
+      <div class="cap">{{i:hand}}<p><b>Live:</b> the agent tried to pay a "reminder" for a bill paid last week. The contract found the earlier payment and held it for a person who is allowed to approve.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- 6. Architecture and performance (20%) -->
+<section class="page p6 g6">
+  <div class="eyebrow"><span class="tag-sec">{{i:flow}} Architecture and performance</span><span class="crit">{{i:timer}} Architecture and performance efficiency <b>20% of the score</b></span></div>
+  <h1>Ten fixed stages per action. <span class="soft">Rules in about 1 ms, AI only when needed.</span></h1>
+  <div class="body">
+    <div class="left">
+      <div class="pn">
+        <div class="figs" style="--cols:2">
+          <div class="fig"><div class="fig-k">{{i:timer}} Rule checks, median</div><div class="fig-v">1.03 ms</div><div class="fig-s">p95 3.13 ms per action</div></div>
+          <div class="fig"><div class="fig-k">{{i:zap}} Throughput</div><div class="fig-v">≈3,000/s</div><div class="fig-s">decisions per CPU core</div></div>
+        </div>
+      </div>
+      <ul class="pts">
+        <li class="pt"><span class="chipbox">{{i:layers}}</span><p><b>Three lanes:</b> input (your words kept for the judge), model (allowed models and budgets) and action (every tool call).</p></li>
+        <li class="pt"><span class="chipbox">{{i:brain}}</span><p><b>AI only on irreversible actions</b> that passed every rule: median 1.1 s on Gemini.</p></li>
+        <li class="pt"><span class="chipbox">{{i:clock}}</span><p><b>Per-stage timing</b> on every action: normalize, identity, known-bad, contract, data guard, judge, execute, screen and audit.</p></li>
+        <li class="pt"><span class="chipbox">{{i:model}}</span><p><b>Local first.</b> One 8B model on a laptop is the agent, judge and injection confirmer, so only one model sits in memory.</p></li>
+      </ul>
+    </div>
+    <div class="shot"><div class="win" style="aspect-ratio:3120/2290"><img src="../architecture-technical.png" alt="Technical architecture"></div></div>
+  </div>
+</section>
+
+<!-- 7. Security reporting (20%) -->
+<section class="page p7 g2">
+  <div class="eyebrow"><span class="tag-sec">{{i:audit}} Security reporting</span><span class="crit">{{i:file}} Security reporting <b>20% of the score</b></span></div>
+  <h1>One view for management, <span class="soft">one for the security team.</span></h1>
+  <div class="body">
+    <div class="pn">
+      <div class="pn-head"><span class="chipbox">{{i:analytics}}</span><span class="pn-title">For management</span><span class="pn-hint">What the layer did, in money and data</span></div>
+      <div class="win"><img src="shots_jpg/evidence-management.jpg" style="--x:0.17;--z:1.22;--y:0.075" alt="Management report"></div>
+      <ul class="rows">
+        <li class="row">{{i:shield}}<p><b>Actions checked</b>, money stopped and money paid.</p></li>
+        <li class="row">{{i:lock}}<p><b>Data protected</b> and approvals still waiting.</p></li>
+        <li class="row">{{i:coins}}<p><b>AI spend per action</b> and why actions were stopped.</p></li>
+      </ul>
+    </div>
+    <div class="pn">
+      <div class="pn-head"><span class="chipbox">{{i:lock}}</span><span class="pn-title">For the security team</span><span class="pn-hint">Every decision, provable</span></div>
+      <div class="win"><img src="shots_jpg/evidence-security.jpg" style="--x:0.17;--z:1.22;--y:0.175" alt="Security log"></div>
+      <ul class="rows">
+        <li class="row">{{i:audit}}<p><b>Every decision</b> with its rule, evidence and the user's quote.</p></li>
+        <li class="row">{{i:check}}<p><b>Hash-chained audit log</b> with one-click verify, plus CSV export.</p></li>
+        <li class="row">{{i:analytics}}<p><b>Prometheus</b> <code>/metrics</code> and JSON telemetry.</p></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 8. Self-testing suite (15%) -->
+<section class="page p8 g3">
+  <div class="eyebrow"><span class="tag-sec">{{i:check}} Completeness of the self-testing suite</span><span class="crit">{{i:search}} Self-testing suite <b>15% of the score</b></span></div>
+  <h1>Three test layers. <span class="soft">One command each, or one click for all.</span></h1>
+  <div class="body">
+    <div class="tests">
+      <div class="pn tcard"><div class="n">174<small>control tests</small></div><div><h3>{{i:algorithm}} Control tests <span class="chip is-off">no AI, about 20 s</span></h3><p>For every control, a normal action it must allow and a misuse it must stop: payments, budgets, limits, data, secrets, injection, exploits, identity, MCP, the audit chain and 50 past incidents. It prints a coverage matrix.</p></div></div>
+      <div class="pn tcard"><div class="n">18<small>live tests</small></div><div><h3>{{i:zap}} Live tests <span class="chip is-warn">real model</span></h3><p>6 things that must get done and 12 that must not happen, run with the layer off and on, and judged by fixed rules.</p></div></div>
+      <div class="pn tcard"><div class="n">23<small>situations</small></div><div><h3>{{i:analytics}} Benchmark <span class="chip is-warn">real model</span></h3><p>The same requests with and without the layer. A deterministic harm judge counts what really happened in the database.</p></div></div>
+    </div>
+    <div class="shot"><div class="win"><img src="shots_jpg/tests.jpg" style="--x:0.16;--z:1.19;--y:0.075" alt="Tests page"></div></div>
+  </div>
+</section>
+
+<!-- 9. Practical implementability and scalability (15%) -->
+<section class="page p9 g4">
+  <div class="eyebrow"><span class="tag-sec">{{i:package}} Practical implementability and scalability</span><span class="crit">{{i:layers}} Practicality and scalability <b>15% of the score</b></span></div>
+  <h1>Drop it in front of any agent. <span class="soft">Change behaviour by editing a file.</span></h1>
+  <div class="body">
+    <div class="left">
+      <div class="pn">
+        <div class="pn-head"><span class="chipbox">{{i:flow}}</span><span class="pn-title">Three ways in</span></div>
+        <ul class="rows">
+          <li class="row">{{i:algorithm}}<p><b>Python SDK</b>One call: <code>gate.call_tool</code>.</p></li>
+          <li class="row">{{i:package}}<p><b>MCP gateway</b>Works with any MCP client.</p></li>
+          <li class="row">{{i:layers}}<p><b>Separate layer process</b>One per agent.</p></li>
+        </ul>
+      </div>
+      <div class="pn">
+        <div class="pn-head"><span class="chipbox">{{i:file}}</span><span class="pn-title">Three config files</span></div>
+        <ul class="rows">
+          <li class="row">{{i:settings}}<p><b><code>policy.yaml</code></b>Lenient, balanced and strict presets, budgets and allowed models.</p></li>
+          <li class="row">{{i:receipt}}<p><b>Contracts per tool</b>What each risky action is checked against.</p></li>
+          <li class="row">{{i:key}}<p><b>Signed attack feed</b>Known attack patterns.</p></li>
+        </ul>
+      </div>
+      <div class="tiles">
+        <div class="pn tile"><span class="chipbox">{{i:timer}}</span><p><b>Live changes.</b> Edits apply to the next action within 0.5 s. Invalid edits are rejected with the reason.</p></div>
+        <div class="pn tile"><span class="chipbox">{{i:plus}}</span><p><b>New business area means a new contract file,</b> not new code.</p></div>
+        <div class="pn tile"><span class="chipbox">{{i:globe}}</span><p><b>Cloud or local.</b> Gemini on Vertex or Ollama on a laptop, with the same checks and budgets for both.</p></div>
+        <div class="pn tile"><span class="chipbox">{{i:zap}}</span><p><b>Scales out.</b> Each check is fast and stateless except a small shared state store, so more gate processes means more capacity.</p></div>
+      </div>
+    </div>
+    <div class="shot"><div class="win"><img src="shots_jpg/config.jpg" style="--x:0.165;--z:1.6;--y:0.07" alt="Configuration page"></div></div>
+  </div>
+</section>
+
+<!-- 10. Try it -->
+<section class="page p10 g1">
+  <div class="top"><div class="brand">{{i:shield}}<span>Tollgate</span></div><span class="tag-sec">{{i:zap}} Try it yourself</span></div>
+  <h1 style="font-size:80px;margin-top:56px">Two commands. <span class="soft">Then break it: edit the policy, change a limit, write your own prompt.</span></h1>
+  <div class="body">
+    <div>
+      <div class="term">
+        <div class="term-bar"><i></i><i></i><i></i><span>~/tollgate</span></div>
+<pre><span class="c"># 1. install and run the tests (no AI needed)</span>
+<span class="p">$</span> uv run pytest
+
+<span class="c"># 2. start the dashboard on http://127.0.0.1:8400</span>
+<span class="p">$</span> uv run python -m dashboard.server</pre>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap"><div class="repo">{{i:globe}} github.com/Aayan-DEV/tollgate</div><div class="repo">{{i:zap}} tollgate-production-9154.up.railway.app</div></div>
+      <div class="cap" style="margin-top:24px;font-size:19px">{{i:model}}<p>Local model: <code>ollama pull qwen3:8b</code> and <code>ollama pull qwen3:0.6b</code>, then press Start in the model picker. Gemini is optional.</p></div>
+    </div>
+    <div class="stats">
+      <div class="pn stat"><div class="fig-k">{{i:shield}} Harmful outcomes</div><div class="fig-v good">0 of 21</div><div class="fig-s">was 9 without the layer</div></div>
+      <div class="pn stat"><div class="fig-k">{{i:check}} Control tests</div><div class="fig-v">174</div><div class="fig-s">all passing, no AI needed</div></div>
+      <div class="pn stat"><div class="fig-k">{{i:timer}} Rule check time</div><div class="fig-v">1 ms</div><div class="fig-s">median per action</div></div>
+      <div class="pn stat"><div class="fig-k">{{i:model}} Runs on</div><div class="fig-v">a laptop</div><div class="fig-s">Ollama qwen3:8b, or Gemini</div></div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>

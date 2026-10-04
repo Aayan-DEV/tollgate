@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import asyncio
 import statistics
 import tempfile
@@ -30,7 +31,7 @@ CALLS = [
 ]
 
 
-async def main(n: int) -> None:
+async def main(n: int, save: bool = False) -> None:
     log.LEVEL = "quiet"
     store = ApStore({"invoices": [{"invoice_id": "INV-B1", "vendor_id": "V-101", "vendor_name": "Baltic Paper Sp. z o.o.",
                                    "amount": 4800, "status": "approved", "document": "INVOICE INV-B1"}]})
@@ -54,9 +55,18 @@ async def main(n: int) -> None:
     for name, v in per_tool.items():
         v.sort()
         print(f"  {name:<28} p50 {q(v, .5):.2f} ms  p99 {q(v, .99):.2f} ms  mean {statistics.mean(v):.2f} ms")
+    if save:   # for the dashboard's Benchmark page
+        out = ROOT / "results" / "bench.json"
+        out.write_text(json.dumps({"decisions": n, "seconds": round(wall, 2), "per_second": round(n / wall),
+                                   "p50": round(q(allms, .5), 3), "p95": round(q(allms, .95), 3), "p99": round(q(allms, .99), 3),
+                                   "tools": [{"tool": k, "p50": round(q(v, .5), 3), "p99": round(q(v, .99), 3)}
+                                             for k, v in per_tool.items()]}, indent=1))
+        print(f"saved {out}")
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=3000)
-    asyncio.run(main(ap.parse_args().n))
+    ap.add_argument("--save", action="store_true", help="write results/bench.json for the dashboard")
+    a = ap.parse_args()
+    asyncio.run(main(a.n, a.save))

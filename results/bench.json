@@ -1,0 +1,45 @@
+{
+ "decisions": 3000,
+ "seconds": 0.95,
+ "per_second": 3149,
+ "p50": 0.173,
+ "p95": 0.473,
+ "p99": 0.602,
+ "tools": [
+  {
+   "tool": "list_open_invoices",
+   "p50": 0.251,
+   "p99": 0.465
+  },
+  {
+   "tool": "read_invoice",
+   "p50": 0.137,
+   "p99": 0.292
+  },
+  {
+   "tool": "get_vendor",
+   "p50": 0.143,
+   "p99": 0.329
+  },
+  {
+   "tool": "pay_invoice",
+   "p50": 0.408,
+   "p99": 0.647
+  },
+  {
+   "tool": "query_db",
+   "p50": 0.3,
+   "p99": 0.659
+  },
+  {
+   "tool": "send_email",
+   "p50": 0.125,
+   "p99": 0.25
+  },
+  {
+   "tool": "update_vendor_bank_details",
+   "p50": 0.09,
+   "p99": 0.209
+  }
+ ]
+}

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 742" font-family="Inter, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect width="100%" height="100%" fill="#FFFFFF"/>
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#68686F"/></marker></defs>
+<text x="40" y="36" font-size="20" font-weight="600" fill="#17171A">Tollgate: every AI action passes one gate; the agent holds no keys</text>
+<rect x="40" y="56" width="12" height="12" rx="3" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/>
+<text x="58" y="66" font-size="12" fill="#68686F">rule-based (same answer every time)</text>
+<rect x="280" y="56" width="12" height="12" rx="3" fill="#F5F0E6" stroke="#7A5310" stroke-width="1.25"/>
+<text x="298" y="66" font-size="12" fill="#68686F">uses AI, can only make a decision stricter</text>
+<rect x="40" y="96" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="54" y="120" font-size="14" font-weight="600" fill="#17171A">User</text><text x="54" y="138" font-size="12" fill="#68686F">asks in plain words</text>
+<rect x="270" y="96" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="284" y="120" font-size="14" font-weight="600" fill="#17171A">AI agent</text><text x="284" y="138" font-size="12" fill="#68686F">holds only the gate</text>
+<rect x="500" y="96" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="514" y="120" font-size="14" font-weight="600" fill="#17171A">Helper agents</text><text x="514" y="138" font-size="12" fill="#68686F">narrower token</text>
+<rect x="730" y="96" width="190" height="54" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="744" y="120" font-size="14" font-weight="600" fill="#17171A">Any MCP client</text><text x="744" y="138" font-size="12" fill="#68686F">same checks via MCP</text>
+<path d="M135 150V168" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M365 150V168" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M595 150V168" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M825 150V168" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M480 556V580" fill="none" stroke="#68686F" stroke-width="1.25"/>
+<path d="M120 580H840" fill="none" stroke="#68686F" stroke-width="1.25"/>
+<path d="M120 580V600" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M300 580V600" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M480 580V600" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M660 580V600" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M840 580V600" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M40 696H24V234H38" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<path d="M920 234H936V696H922" fill="none" stroke="#68686F" stroke-width="1.25" marker-end="url(#a)"/>
+<rect x="40" y="170" width="880" height="386" rx="10" fill="#F9F8F6" stroke="#68686F" stroke-width="1.25"/>
+<text x="56" y="194" font-size="14" font-weight="600" fill="#17171A">Tollgate: the one gate every action passes</text>
+<rect x="56" y="206" width="424" height="56" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="70" y="230" font-size="14" font-weight="600" fill="#17171A">Input lane</text><text x="70" y="248" font-size="12" fill="#68686F">your words kept for the judge; private data tokenized</text>
+<rect x="496" y="206" width="408" height="56" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="510" y="230" font-size="14" font-weight="600" fill="#17171A">Model lane</text><text x="510" y="248" font-size="12" fill="#68686F">allowed models; cost, token and step budget</text>
+<rect x="56" y="278" width="848" height="262" rx="8" fill="none" stroke="#E6E4DF" stroke-width="1.25"/>
+<text x="72" y="300" font-size="14" font-weight="600" fill="#17171A">Action lane: every tool call, nine steps in order</text>
+<rect x="72" y="314" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="86" y="338" font-size="14" font-weight="600" fill="#17171A">1  Who is asking?</text><text x="86" y="356" font-size="12" fill="#68686F">signed agent token</text>
+<rect x="348" y="314" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="362" y="338" font-size="14" font-weight="600" fill="#17171A">2  Is it known-bad?</text><text x="362" y="356" font-size="12" fill="#68686F">normalizer, attack feed, secrets</text>
+<rect x="624" y="314" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="638" y="338" font-size="14" font-weight="600" fill="#17171A">3  What would really happen?</text><text x="638" y="356" font-size="12" fill="#68686F">contract looks up real records</text>
+<rect x="72" y="388" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="86" y="412" font-size="14" font-weight="600" fill="#17171A">4  Within the rules?</text><text x="86" y="430" font-size="12" fill="#68686F">data guard, limits</text>
+<rect x="348" y="388" width="258" height="58" rx="8" fill="#F5F0E6" stroke="#7A5310" stroke-width="1.25"/><text x="362" y="412" font-size="14" font-weight="600" fill="#17171A">5  Did the user ask for it?</text><text x="362" y="430" font-size="12" fill="#68686F">AI judge quotes the user</text>
+<rect x="624" y="388" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="638" y="412" font-size="14" font-weight="600" fill="#17171A">6  Decide</text><text x="638" y="430" font-size="12" fill="#68686F">allow · ask a person · block</text>
+<rect x="72" y="462" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="86" y="486" font-size="14" font-weight="600" fill="#17171A">7  Do it safely</text><text x="86" y="504" font-size="12" fill="#68686F">verified values, one transaction</text>
+<rect x="348" y="462" width="258" height="58" rx="8" fill="#F5F0E6" stroke="#7A5310" stroke-width="1.25"/><text x="362" y="486" font-size="14" font-weight="600" fill="#17171A">8  Is the result safe?</text><text x="362" y="504" font-size="12" fill="#68686F">mask data, drop hidden orders</text>
+<rect x="624" y="462" width="258" height="58" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="638" y="486" font-size="14" font-weight="600" fill="#17171A">9  Remember it</text><text x="638" y="504" font-size="12" fill="#68686F">hash-chained log, metrics</text>
+<rect x="40" y="602" width="160" height="52" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="54" y="626" font-size="14" font-weight="600" fill="#17171A">ERP</text><text x="54" y="644" font-size="12" fill="#68686F">payments, data</text>
+<rect x="220" y="602" width="160" height="52" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="234" y="626" font-size="14" font-weight="600" fill="#17171A">Email</text><text x="234" y="644" font-size="12" fill="#68686F">inside and out</text>
+<rect x="400" y="602" width="160" height="52" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="414" y="626" font-size="14" font-weight="600" fill="#17171A">Model files</text><text x="414" y="644" font-size="12" fill="#68686F">forecasts</text>
+<rect x="580" y="602" width="160" height="52" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="594" y="626" font-size="14" font-weight="600" fill="#17171A">MCP tools</text><text x="594" y="644" font-size="12" fill="#68686F">vendor portal</text>
+<rect x="760" y="602" width="160" height="52" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="774" y="626" font-size="14" font-weight="600" fill="#17171A">LLMs</text><text x="774" y="644" font-size="12" fill="#68686F">Gemini, Ollama</text>
+<rect x="40" y="674" width="430" height="46" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="54" y="702" font-size="14" font-weight="600" fill="#17171A">Configuration: policy.yaml · contracts · signed attack feed</text>
+<rect x="490" y="674" width="430" height="46" rx="8" fill="#FFFFFF" stroke="#E6E4DF" stroke-width="1.25"/><text x="504" y="702" font-size="14" font-weight="600" fill="#17171A">Evidence: audit log, /metrics, CSV</text>
+</svg>

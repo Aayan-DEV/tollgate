@@ -7,13 +7,14 @@ the chat stream; the gate's own listener records decisions for the layer and evi
 
 from __future__ import annotations
 
+import re
 import time
 from typing import TYPE_CHECKING, AsyncIterator
 
 from erp.seed import TODAY
 from tollgate.budget import BudgetExceeded
 from tollgate.llm import make_chat
-from tollgate.llm.base import provider_of
+from tollgate.llm.base import ACTIVITY, provider_of
 from tollgate.policy import Person
 
 if TYPE_CHECKING:
@@ -69,18 +70,47 @@ def summarize(result: object, name: str = "") -> str:
     return str(result)[:200]
 
 
+PROMISE = re.compile(r"(?i)\b(i will now|i'll now|let me now|i am going to|i'm going to|next,? i will|i will proceed|i'll proceed|"
+                     r"i will look up|i'll look up|i will check|i'll check|let me (?:check|look|investigate|try|find|verify|search))\b[^.?!]*[.!]?\s*$")
+
+
+def _say(c: "Conversation", text: str) -> None:
+    """What this chat is doing right now, for the chat list, the thread and the Tests page."""
+    c.activity, c.activity_ts = text, time.time()
+
+
 async def run_turn(rt: "Runtime", c: "Conversation", text: str) -> AsyncIterator[dict]:
+    rt.policy   # picks up any edit to policy.yaml for this chat before it acts
+    c.status, c.turn_started, c.live = "running", time.time(), []
+    _say(c, "thinking")
+    hook = ACTIVITY.set(lambda msg: _say(c, msg))   # model retries and empty replies show up on this chat
+    try:
+        async for ev in _turn(rt, c, text):
+            yield ev
+        c.status = "done"
+    except BaseException:
+        c.status = "error"
+        raise
+    finally:
+        ACTIVITY.reset(hook)
+        if c.status == "running":   # the stream was cancelled (browser closed, test stopped)
+            c.status = "stopped"
+        _say(c, "")
+
+
+async def _turn(rt: "Runtime", c: "Conversation", text: str) -> AsyncIterator[dict]:
     provider = provider_of(c.model)
     started = time.time()
     c.thread.append({"role": "you", "text": text})
     c.updated = time.time()
     c.chat.add_user(c.gate.user_message(text, provider))
-    steps: list[dict] = []
-    nudged = False
+    steps: list[dict] = c.live
+    nudged = continued = False
     yield {"type": "start", "layer": c.gate.enabled, "model": c.model}
     for _ in range(MAX_STEPS):
         try:
             c.gate.model_precheck(c.model)
+            _say(c, "waiting for the model")
             turn = await c.chat.step()
         except BudgetExceeded as err:
             answer = f"The layer stopped this conversation: {err}."
@@ -88,13 +118,22 @@ async def run_turn(rt: "Runtime", c: "Conversation", text: str) -> AsyncIterator
             yield {"type": "final", "text": answer, "steps": steps}
             return
         except Exception as err:  # model or transport failure
+            c.thread.append({"role": "agent", "text": f"The model did not answer ({type(err).__name__}).", "steps": steps,
+                             "seconds": round(time.time() - started)})
             yield {"type": "error", "text": f"The model did not answer ({type(err).__name__}). Try again in a moment."}
             return
         c.gate.model_settle(c.model, turn.tokens_in, turn.tokens_out, turn.ms, len(turn.calls))
+        _say(c, "thinking")
         yield {"type": "thinking", "seconds": round(time.time() - started)}
         if not turn.calls and not turn.text.strip() and not nudged:
             nudged = True   # the model went quiet: ask once for the answer instead of showing a blank reply
+            _say(c, "the model gave no answer; asking again")
             c.chat.add_user("Please answer my last message, using the tools if you need them.")
+            continue
+        if not turn.calls and PROMISE.search(turn.text.strip()) and not continued:
+            continued = True   # it ended its turn by promising more work ("I will now look up..."): let it do it
+            _say(c, "the model said it would continue; telling it to go ahead")
+            c.chat.add_user("Go ahead.")
             continue
         if not turn.calls:
             answer = c.gate.final_answer(turn.text).strip() or "The model returned an empty answer. Please ask again."
@@ -107,6 +146,7 @@ async def run_turn(rt: "Runtime", c: "Conversation", text: str) -> AsyncIterator
                 async for ev in _delegate(rt, c, call, provider, steps):
                     yield ev
                 continue
+            _say(c, f"checking: {call.name}")
             yield {"type": "call", "name": call.name, "args": call.args}
             result, step = await act(rt, c, call.name, call.args, provider)
             steps.append(step)
@@ -162,12 +202,14 @@ async def _delegate(rt: "Runtime", c: "Conversation", call, provider: str, steps
         except BudgetExceeded as err:   # the sub-agent shares the conversation's budget
             report = f"The layer stopped the payments agent: {err}."
             break
+        _say(c, "the payments helper is waiting for the model")
         t = await sub.step()
         c.gate.model_settle(c.model, t.tokens_in, t.tokens_out, t.ms, len(t.calls))
         if not t.calls:
             report = c.gate.final_answer(t.text).strip() or report
             break
         for sc in t.calls:
+            _say(c, f"the payments helper is checking: {sc.name}")
             yield {"type": "call", "name": sc.name, "args": sc.args, "via": "payments-agent"}
             result, st = await act(rt, c, sc.name, sc.args, provider, token=token, via="payments-agent")
             steps.append(st)

@@ -13,7 +13,7 @@ from google import genai
 from google.genai import errors, types
 from google.oauth2 import service_account
 
-from tollgate.llm.base import ToolCall, Turn, load_env
+from tollgate.llm.base import ToolCall, Turn, load_env, note
 
 ROOT = Path(__file__).resolve().parents[2]
 _client: genai.Client | None = None
@@ -49,7 +49,9 @@ async def _generate(**kwargs):
         except errors.APIError as err:
             if err.code not in RETRYABLE or attempt == 5:
                 raise
-            await asyncio.sleep(min(30, 2 ** attempt) + random.random())
+            delay = min(30, 2 ** attempt) + random.random()
+            note(f"Gemini is busy (error {err.code}); trying again in {delay:.0f} s, attempt {attempt + 2} of 6")
+            await asyncio.sleep(delay)
 
 
 def _usage(resp) -> tuple[int, int]:
@@ -106,6 +108,7 @@ class GeminiChat:
                 self.contents.append(content)  # keeps thought signatures intact
                 break
             # An empty reply (no text, no tool call; e.g. a malformed function call) is not an answer: ask again.
+            note("the model sent an empty reply; asking again")
         return Turn(text, calls, tin, tout, (time.perf_counter() - t0) * 1000)
 
 

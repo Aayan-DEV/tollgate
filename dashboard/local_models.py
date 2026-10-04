@@ -14,9 +14,8 @@ import time
 
 import httpx
 
-from tollgate.llm.ollama import OLLAMA_URL
+from tollgate.llm.ollama import KEEP_ALIVE, NUM_CTX, OLLAMA_URL
 
-KEEP_ALIVE = "30m"
 
 
 class LocalModels:
@@ -75,7 +74,8 @@ class LocalModels:
         try:
             await self._ensure_server()
             for m in [model, *[h for h in helpers if h != model]]:
-                r = await self._client.post("/api/generate", json={"model": m, "prompt": "", "keep_alive": KEEP_ALIVE})
+                r = await self._client.post("/api/generate", json={"model": m, "prompt": "", "keep_alive": KEEP_ALIVE,
+                                                                     "options": {"num_ctx": NUM_CTX}})  # same size as chats: no reload
                 if r.status_code >= 400:
                     raise RuntimeError(r.json().get("error", f"HTTP {r.status_code}"))
         except Exception as err:  # shown in the picker; the next start retries

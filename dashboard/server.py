@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import sys
 import time
@@ -19,12 +20,12 @@ from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from dashboard import testrun
+from dashboard import architecture, benchmark, config_files, runall, testrun
 from dashboard.local_models import LocalModels
-from dashboard.runtime import AUDIT_PATH, JUDGE_FOR, MODELS, Runtime
+from dashboard.runtime import AUDIT_PATH, BEST_LOCAL, MODELS, Runtime, judge_for
 from tollgate import log
 from tollgate.audit import recent, to_csv, verify
-from tollgate.metrics import REGISTRY
+from tollgate.metrics import BY_MODEL, REGISTRY
 
 STATIC = Path(__file__).resolve().parent / "static"
 ROOT = STATIC.parents[1]
@@ -85,12 +86,54 @@ def model(body: Pick) -> dict:
     return rt.state_view()
 
 
+# ---------------- configuration files: read, check, save (hot reloaded by the layer) ----------------
+class ConfigSave(BaseModel):
+    text: str
+    sha: str = ""
+
+
+def _config_status() -> dict:
+    pol, f = rt.policy_store.get(), rt.gate.feed
+    f.sync()
+    return {"policy": f"preset {pol.preset} · {len(pol.people)} people · {len(pol.limits)} limits · active hash {rt.policy_store.sha}",
+            "contracts": f"{len(rt.gate.contracts.contracts)} actions checked: {', '.join(sorted(rt.gate.contracts.contracts))}",
+            "feed": f"active v{f.version} from {f.source} · {len(f.signatures)} signatures"}
+
+
+@app.get("/api/config")
+def config() -> dict:
+    return {"files": [config_files.read(fid) for fid in config_files.FILES], "status": _config_status()}
+
+
+@app.post("/api/config/{fid}")
+async def save_config(fid: str, body: ConfigSave) -> dict:
+    if fid not in config_files.FILES:
+        return JSONResponse({"error": "unknown file"}, 404)
+    res = config_files.save(fid, body.text, body.sha, rt.policy_store.get())
+    if res.get("ok") and not res.get("unchanged"):
+        log.system(f"dashboard: {config_files.FILES[fid]['path']} saved ({'; '.join(res['summary'][:4])})")
+        await asyncio.sleep(0.6)   # one reload interval, so the status below is the layer's new state
+        rt.gate.feed._checked = 0
+    return {**res, "status": _config_status(), "file": config_files.read(fid)}
+
+
+@app.get("/api/architecture")
+def arch() -> list[dict]:
+    return architecture.components()
+
+
+@app.get("/api/benchmark")
+def bench() -> dict:
+    return benchmark.view(rt.model)
+
+
 @app.get("/api/models")
 async def models() -> list[dict]:
     """Every model the agent can use; local ones with their Ollama state (no_server, missing, stopped, loading, ready)."""
     locals_ = [m for m in MODELS if not m.startswith("gemini")]
-    st = await local.status(locals_)
+    st = await local.status(locals_) if locals_ else {}   # hosted: no Ollama to ask
     return [{"id": m, "name": name, "kind": "cloud" if m.startswith("gemini") else "local", "current": m == rt.model,
+             "best": m == BEST_LOCAL,
              **({"state": "ready"} if m.startswith("gemini") else st[m])} for m, name in MODELS.items()]
 
 
@@ -98,7 +141,7 @@ async def models() -> list[dict]:
 async def start_model(body: Pick) -> list[dict]:
     if body.id not in MODELS or body.id.startswith("gemini"):
         return JSONResponse({"error": "not a local model"}, 400)
-    helpers = [JUDGE_FOR[body.id], rt.policy.controls.injection.screen_model]
+    helpers = [judge_for(body.id), rt.policy.controls.injection.screen_model]
     task = asyncio.create_task(local.start(body.id, helpers))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -140,14 +183,18 @@ def open_conversation(cid: str) -> dict:
 
 @app.delete("/api/conversations")
 def delete_conversations() -> dict:
-    if rt.lock.locked() or (TESTS["run"] and not TESTS["run"].finished):
+    if rt.lock.locked() or _busy():
         return JSONResponse({"error": "Wait until the agent and any test run have finished."}, 409)
     rt.delete_all_conversations()
     return rt.state_view()
 
 
 # ---------------- tests: live agent cases and the control suite ----------------
-TESTS: dict = {"run": None, "pytest": {"state": "idle"}}
+TESTS: dict = {"runs": {}, "all": {}, "pytest": {"state": "idle"}}   # live runs and full runs are per agent model
+
+
+def _busy() -> bool:
+    return any(not r.finished for r in TESTS["runs"].values()) or any(not f.finished for f in TESTS["all"].values())
 
 
 class TestStart(BaseModel):
@@ -158,18 +205,19 @@ class TestStart(BaseModel):
 
 @app.get("/api/tests")
 def tests() -> dict:
-    run = TESTS["run"]
+    run, full = TESTS["runs"].get(rt.model), TESTS["all"].get(rt.model)
     return {"cases": [{"id": c["id"], "title": c["title"], "plain": c.get("plain", ""), "go": c.get("go", True),
                        "person": c.get("person", "piotr"), "prompt": c["prompt"]} for c in testrun.load_cases()],
-            "run": run.view() if run else None, "pytest": TESTS["pytest"], "model": rt.model}
+            "run": run.view() if run else None, "all": full.view() if full else None, "pytest": TESTS["pytest"],
+            "model": rt.model, "busy": _busy()}
 
 
 @app.post("/api/tests/run")
 async def start_tests(body: TestStart) -> dict:
-    if TESTS["run"] and not TESTS["run"].finished:
+    if _busy():
         return JSONResponse({"error": "A test run is already going."}, 409)
     run = testrun.new_run(body.layer, rt.model, max(1, min(body.concurrency, 12)), body.only)
-    TESTS["run"] = run
+    TESTS["runs"][rt.model] = run
     task = asyncio.create_task(testrun.execute(rt, run))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -177,7 +225,7 @@ async def start_tests(body: TestStart) -> dict:
     return tests()
 
 
-async def _pytest() -> None:
+async def _pytest() -> dict:
     t0 = time.time()
     TESTS["pytest"] = {"state": "running", "started": t0}
     proc = await asyncio.create_subprocess_exec(sys.executable, "-m", "pytest", "-p", "no:cacheprovider", cwd=str(ROOT),
@@ -191,6 +239,23 @@ async def _pytest() -> None:
     failures = re.findall(r"^FAILED (\S+)", out, re.M)
     TESTS["pytest"] = {"state": "done", "ok": proc.returncode == 0, "passed": passed, "failed": failed, "failures": failures,
                        "rows": rows, "seconds": round(time.time() - t0, 1), "tail": out[-1500:] if proc.returncode else ""}
+    return TESTS["pytest"]
+
+
+@app.post("/api/tests/all")
+async def run_everything() -> dict:
+    """One click: control tests, live tests off and on, and the 23-situation before/after for the selected agent."""
+    if _busy() or TESTS["pytest"].get("state") == "running":
+        return JSONResponse({"error": "A test run is already going."}, 409)
+    model = rt.model
+    fr = runall.new(model)
+    TESTS["all"][model] = fr
+    TESTS["pytest"] = {"state": "running", "started": time.time()}
+    task = asyncio.create_task(runall.execute(rt, fr, _pytest, lambda run: TESTS["runs"].__setitem__(model, run), judge_for(model)))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+    log.system(f"dashboard: running everything for {model}")
+    return tests()
 
 
 @app.post("/api/tests/pytest")
@@ -265,9 +330,11 @@ def metrics() -> PlainTextResponse:
 
 
 @app.get("/api/audit.csv")
-def audit_csv() -> Response:
-    return Response(to_csv(AUDIT_PATH), media_type="text/csv",
-                    headers={"Content-Disposition": 'attachment; filename="tollgate-audit.csv"', "Cache-Control": "no-store"})
+def audit_csv(scope: str = "model") -> Response:
+    model = rt.model if scope == "model" else None
+    name = f"tollgate-audit-{testrun.slug(model) if model else 'all'}.csv"
+    return Response(to_csv(AUDIT_PATH, model), media_type="text/csv",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
 
 
 @app.get("/api/audit/verify")
@@ -279,17 +346,39 @@ def audit_verify() -> dict:
 
 
 @app.get("/api/audit/recent")
-def audit_recent(limit: int = 100) -> dict:
-    records = recent(AUDIT_PATH, max(1, min(limit, 500)))
-    return {"file": AUDIT_PATH.name, "records": [{k: r.get(k) for k in ("ts", "session", "tool", "kind", "decision", "effect",
-                                                                       "findings", "judge", "latency_ms", "policy_sha",
-                                                                       "feed_version", "hash", "prev")} for r in records]}
+def audit_recent(limit: int = 300) -> dict:
+    """The security log for the selected agent model, newest first."""
+    records = [r for r in recent(AUDIT_PATH, 20000) if r.get("agent_model") == rt.model][: max(1, min(limit, 2000))]
+    keys = ("ts", "agent_model", "caller", "acting_for", "session", "tool", "kind", "decision", "effect", "findings", "judge",
+            "latency_ms", "stages_ms", "policy_sha", "feed_version", "hash", "prev")
+    return {"file": AUDIT_PATH.name, "model": rt.model, "records": [{k: r.get(k) for k in keys} for r in records]}
 
 
 @app.get("/api/metrics.json")
 def metrics_json() -> dict:
     o = rt.overview()
-    return {**REGISTRY.snapshot(), "layer": rt.layer_on, "waiting": o["waiting"], "preset": rt.policy_store.policy.preset}
+    return {**BY_MODEL[rt.model].snapshot(), "layer": rt.layer_on, "waiting": o["waiting"], "preset": rt.policy_store.policy.preset,
+            "model": rt.model}
+
+
+@app.get("/api/telemetry")
+def telemetry() -> dict:
+    """Performance telemetry for the selected agent: time per pipeline stage, per model call, and over time."""
+    m = BY_MODEL[rt.model]
+    return {"model": rt.model, **m.telemetry(), "gate": m.snapshot()["gate"], "ai": m.snapshot()["ai"]}
+
+
+@app.get("/api/telemetry.json")
+def telemetry_export() -> Response:
+    body = json.dumps({"exported": time.time(), **telemetry()}, indent=1)
+    return Response(body, media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="tollgate-telemetry-{testrun.slug(rt.model)}.json"'})
+
+
+@app.get("/api/report")
+def report() -> dict:
+    """The management summary for the selected agent."""
+    return rt.report()
 
 
 @app.get("/api/feed")
@@ -331,7 +420,8 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--port", type=int, default=8400)
+    ap.add_argument("--port", type=int, default=int(os.environ.get("PORT", 8400)))
+    ap.add_argument("--host", default=os.environ.get("HOST", "127.0.0.1"))
     a = ap.parse_args()
     log.session_label.set("dashboard")
-    uvicorn.run(app, host="127.0.0.1", port=a.port, log_level="warning")
+    uvicorn.run(app, host=a.host, port=a.port, log_level="warning")

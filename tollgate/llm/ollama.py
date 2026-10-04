@@ -11,13 +11,17 @@ import httpx
 from tollgate.llm.base import ToolCall, Turn
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-_client = httpx.AsyncClient(base_url=OLLAMA_URL, timeout=httpx.Timeout(300.0, connect=5.0))
+_client = httpx.AsyncClient(base_url=OLLAMA_URL, timeout=httpx.Timeout(600.0, connect=5.0))
+# One context size for every call: Ollama reloads a model whenever num_ctx changes, so an agent and a checker that share
+# a model but ask for different sizes would reload it on every turn.
+NUM_CTX = 16384
+KEEP_ALIVE = "30m"   # stay loaded between turns and test runs; loading costs seconds every time
 
 
-def _options(model: str) -> dict:
-    body: dict = {"options": {"num_ctx": 16384}}
-    if model.startswith("qwen3"):
-        body["think"] = False  # speed; reasoning models are slow on a laptop
+def _options(model: str, **extra) -> dict:
+    body: dict = {"options": {"num_ctx": NUM_CTX, **extra}, "keep_alive": KEEP_ALIVE}
+    if "qwen3" in model.lower():
+        body["think"] = False  # speed; reasoning models are slow on a laptop (also for qwen3 fine-tunes under other names)
     return body
 
 
@@ -59,7 +63,7 @@ async def complete_json(model: str, system: str, prompt: str, schema: dict, time
     res = await _client.post("/api/chat", timeout=timeout, json={
         "model": model, "stream": False, "format": schema,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
-        **_options(model), "options": {"num_ctx": 8192, "temperature": 0},
+        **_options(model, temperature=0),
     })
     res.raise_for_status()
     data = res.json()

@@ -1,6 +1,6 @@
 // TESTS: two kinds of proof. Live agent tests (real chats with the model, many at once) and the control suite.
 import { api } from "../api.js";
-import { icon, esc, num, usd, personMark } from "../ui.js";
+import { icon, esc, num, usd, personMark, activityText } from "../ui.js";
 
 let root, S, A, T = null, busy = false;
 
@@ -22,8 +22,8 @@ export async function mount(el, state, actions) {
 }
 
 export async function onPoll() {
-  const live = T?.run && !T.run.finished, unit = T?.pytest?.state === "running";
-  if (!live && !unit) return;
+  const live = T?.run && !T.run.finished, unit = T?.pytest?.state === "running", all = T?.all && !T.all.finished;
+  if (!live && !unit && !all && !T?.busy) return;
   T = await api.tests();
   draw();
 }
@@ -53,16 +53,17 @@ function draw() {
   const go = cases.filter((c) => c.go), stop = cases.filter((c) => !c.go);
   page.innerHTML = `
     <div class="page-head"><div>
-      <h1>Tests</h1>
+      <h1>Tests: ${esc(S.state.models[T.model] || T.model)}</h1>
       <p>Two kinds of proof. <b>Live tests</b> give the AI real requests, ${T.cases.length} chats at once, and check what actually happened. <b>Control tests</b> check every rule directly, without any AI, in about half a minute.</p>
     </div></div>
     <div class="pn-stack">
+      ${allPanel(T.all, T.model)}
       <section class="pn-panel">
         <header class="pn-head"><span class="pn-head-ico">${icon("agent")}</span><span class="pn-head-title">Live tests</span>
           <span class="pn-head-hint">${esc(S.state.models[T.model] || T.model)} · each chat gets its own fresh copy of the company's data</span>
           <span class="pn-head-right">
-            <button class="key is-small" data-run="on" ${live || busy ? "disabled" : ""}>${icon("shield")}Run with the layer on</button>
-            <button class="key is-small is-quiet" data-run="off" ${live || busy ? "disabled" : ""}>${icon("unlock")}Run with the layer off</button>
+            <button class="key is-small" data-run="on" ${live || busy || T.busy ? "disabled" : ""}>${icon("shield")}Run with the layer on</button>
+            <button class="key is-small is-quiet" data-run="off" ${live || busy || T.busy ? "disabled" : ""}>${icon("unlock")}Run with the layer off</button>
           </span></header>
         ${run ? summary(run) : `<p class="pn-empty">Press a button to start. With the layer on every case should pass; with it off, most "should not happen" cases fail. That difference is the point.</p>`}
       </section>
@@ -75,6 +76,13 @@ function draw() {
   page.querySelectorAll("[data-run]").forEach((b) => (b.onclick = () => start(b.dataset.run === "on")));
   page.querySelectorAll("[data-open]").forEach((b) => (b.onclick = async () => { await A.openChat(b.dataset.open); location.hash = "#agent"; }));
   page.querySelector("[data-pytest]")?.addEventListener("click", async () => { T = await api.runPytest(); draw(); });
+  page.querySelector("[data-all]")?.addEventListener("click", async () => {
+    busy = true; draw();
+    const r = await api.runAll();
+    busy = false;
+    if (r.error) alert(r.error); else T = r;
+    draw();
+  });
 }
 
 async function start(layer) {
@@ -83,6 +91,25 @@ async function start(layer) {
   busy = false;
   if (!r.error) T = r;
   draw();
+}
+
+const STEP_ICON = { waiting: "clock", running: "loading", done: "check", failed: "cancel" };
+
+// One button fills every page for this agent; each step shows its progress.
+function allPanel(A, model) {
+  const local = !model.startsWith("gemini");
+  const running = A && !A.finished;
+  return `<section class="pn-panel">
+    <header class="pn-head"><span class="pn-head-ico">${icon("zap")}</span><span class="pn-head-title">Run everything for this agent</span>
+      <span class="pn-head-hint">Fills Tests, Benchmark, The layer and Evidence for ${esc(S.state.models[model] || model)}${local ? " · a local model takes hours for all steps" : " · about 5 minutes"}</span>
+      <span class="pn-head-right"><button class="key is-small" data-all ${running || busy || T.busy ? "disabled" : ""}>${icon(running ? "loading" : "zap", running ? "spin" : "")}${running ? `Running ${A.seconds} s` : A ? "Run everything again" : "Run everything"}</button></span></header>
+    ${A ? `<ol class="ra-steps">${A.steps.map((st) => `<li class="ra-step is-${st.status}">${icon(STEP_ICON[st.status], st.status === "running" ? "spin" : "")}
+        <span class="ra-title">${esc(st.title)}</span>
+        <span class="ra-bar"><span style="width:${st.total ? Math.min(100, (100 * st.done) / st.total) : 0}%"></span></span>
+        <span class="ra-count figure">${st.done}/${st.total}</span>
+        <span class="ra-detail">${esc(st.detail || (st.status === "waiting" ? "waiting" : st.status === "running" ? "running…" : ""))}${st.seconds ? ` · ${st.seconds} s` : ""}</span></li>`).join("")}</ol>`
+      : `<p class="pn-empty">One click runs, in order: the control tests, the live tests with the layer off and then on, and the 23 situations without and with the layer. Every page fills in as it goes.</p>`}
+  </section>`;
 }
 
 function summary(run) {
@@ -117,6 +144,8 @@ function card(c, run) {
       <div class="ts-title"><b>${esc(c.title)}</b>${st ? `<span class="chip ${st[2]}">${st[1]}${c.seconds ? ` · ${Math.round(c.seconds)} s` : ""}</span>` : ""}</div>
       <div class="ts-plain">${esc(c.plain)}</div>
       <div class="ts-prompt">${personMark(c.person)}<q>${esc(c.prompt)}</q></div>
+      ${c.status === "running" && c.live ? `<div class="ts-live ${c.live.quiet_s >= 60 ? "is-slow" : ""}">${icon("loading", "spin")} ${c.live.steps} ${c.live.steps === 1 ? "step" : "steps"} · now: ${esc(activityText(c.live.activity))}${c.live.quiet_s >= 5 ? `, for ${c.live.quiet_s} s` : ""}</div>` : ""}
+      ${c.status === "queued" ? `<div class="ts-live">${icon("clock")} Waiting for a free slot</div>` : ""}
       ${result}
       ${c.conversation ? `<button class="key is-small is-quiet" data-open="${esc(c.conversation)}">${icon("agent")}Open the chat</button>` : ""}
     </div></li>`;

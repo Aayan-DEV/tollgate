@@ -1,97 +1,93 @@
-# Tollgate: an action-level control layer for AI agents
+# Tollgate
 
-Tollgate sits between AI agents and the systems they act on. The agent holds no keys and no connections: every action goes through the gate, which works out **what the action would really do**, checks it, and then allows it, holds it for a person, or blocks it.
+**One gate that every AI agent action passes.** Tollgate sits between AI agents and the systems they act on (payments, email, database, files, MCP tools). The agent holds no keys. For every action, Tollgate works out what it would really do, checks it, and then allows it, holds it for a person, or blocks it.
 
-Use case: "Nordwind", a finance accounts-payable agent over a synthetic ERP (16 tables, 245 columns, 16,722 rows).
+Demo company: "Nordwind", a finance team with an AI agent that pays invoices (synthetic data only).
 
-- Architecture and why each part exists: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- OWASP LLM Top 10 and Agentic Top 10 mapping, with the test that proves each row: [docs/OWASP.md](docs/OWASP.md)
-- Demo script with prompts and expected outcomes: [docs/DEMO.md](docs/DEMO.md)
+**Live demo (Gemini):** https://tollgate-production-9154.up.railway.app
+
+## Run it (2 commands)
+
+You need [uv](https://docs.astral.sh/uv/) and, for the local AI model, [Ollama](https://ollama.com).
+
+```bash
+uv run pytest
+```
+
+```bash
+uv run python -m dashboard.server
+```
+
+1. The first command installs everything, builds the demo database and runs the 174 control tests (no AI needed, about 20 s).
+2. The second starts the dashboard at **http://127.0.0.1:8400**.
+
+**AI model (pick one):**
+- **Local (free):** run `ollama pull qwen3:8b` and `ollama pull qwen3:0.6b` once, then press **Start** in the model picker at the top left.
+- **Gemini (optional):** put `GCP_PROJECT_ID` and `SERVICE_ACCOUNT_JSON` in a `.env` file (Vertex AI, `europe-west4`).
+
+## What to try
+
+1. **Agent:** ask "Please pay the Krakow Logistics reminder INV-7003-R." The layer holds it: the same bill was paid last week.
+2. **Layer switch** (bottom left): turn it off and ask again. The duplicate is paid.
+3. **Settings icon** (top right): edit `policy.yaml` or a contract. Changes apply within 0.5 s; invalid edits are rejected.
+4. **Tests → Run everything:** control tests, live tests with the layer off and on, and the 23-situation before/after, for the selected model.
+5. **Evidence:** management summary, security log (CSV, hash-chain verify), performance per stage.
 
 ## Results
 
-Same agents, same generic system prompt (no test-specific rules), 23 scenarios (payments, email, files, data access). The protected rounds were run before and after adding identity, MCP, secrets and injection screening. Qwen's usefulness is low with or without the layer: the 8B model gets amounts and accounts wrong, and the layer refuses those payments instead of letting them through.
+Same model, same plain system prompt (no rules for these tests). Only the layer changed.
 
-| Setup | Harmful runs | Useful runs |
+| | No layer | With Tollgate |
 |---|---|---|
-| Gemini 2.5 Flash, no layer | 9 of 21 (43%) | 98% |
-| Gemini 2.5 Flash, with Tollgate | **0 of 42** (2 rounds) | 96% |
-| Qwen3 8B (local), no layer | 17 of 20 (85%) | 7% |
-| Qwen3 8B (local), with Tollgate | **0 of 41** (2 rounds) | 7% |
+| Gemini 2.5 Flash: harmful outcomes in 21 risky situations | 9 | **0** |
+| Gemini 2.5 Flash: useful work done | 93% | 93% |
+| Gemini 2.5 Flash: live tests passed | 7 of 18 | **18 of 18** |
+| Qwen3 8B (local): live tests passed | 6 of 18 | **18 of 18** |
+| Qwen3 8B (local): harmful outcomes in 21 risky situations | 17 | **0** |
 
-Gate overhead: p50 0.17 ms, p99 0.61 ms, about 3,000 decisions per second on one core (`uv run python -m evals.bench`).
+Rule checks take about 1 ms per action (p95 about 3 ms), about 3,000 decisions per second on one CPU core. AI is only asked about irreversible actions that passed every rule.
 
-## Test suite
+## How it works
 
-Two parts, both ready to run, both also one click on the dashboard's **Tests** page.
+Every tool call goes through 10 fixed stages: normalize, identity, known-bad patterns, resolve the real effect, data guard and limits, AI judge, decide, execute with verified values, screen the result, record. The strictest finding wins (allow < ask a person < block). AI can only make a decision stricter, never looser.
 
-| Part | What it proves | Command | Result |
-|---|---|---|---|
-| Control tests | every rule, each with a normal action it must allow and a misuse it must stop: payments, budgets, daily limits, data access, secrets, hidden instructions, known exploits (CVE patterns), identity, MCP, audit chain, 50 past incidents | `uv run pytest` | 169 passed in about 16 s, no AI needed |
-| Live tests | a real model gets 18 requests (6 that must get done, 12 that must not happen), many chats at once, each in its own fresh copy of the data | `uv run python -m dashboard.testrun` (add `--layer off` for the baseline) | layer on: 18 of 18 in 41 s, $0.10. Layer off: 7 of 18 |
+- Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/architecture-technical.png](docs/architecture-technical.png)
+- Every setting explained: [docs/CONFIGURATION.md](docs/CONFIGURATION.md)
+- OWASP LLM and Agentic Top 10 mapping: [docs/OWASP.md](docs/OWASP.md)
+- Demo script: [docs/DEMO.md](docs/DEMO.md)
+- Slides: [docs/deck/Tollgate.pdf](docs/deck/Tollgate.pdf)
 
-Cases live in `tests/cases.yaml` and `tests/live_cases.yaml`; both are YAML, so new cases need no Python.
+## Config files (edit live)
 
-## Quickstart
+| File | What it controls |
+|---|---|
+| `policy.yaml` | strictness preset (lenient, balanced, strict), each control, allowed models, budgets, people and limits |
+| `contracts/finance_ap.yaml` | what each tool call is checked against (real invoice, account on file, duplicates, limits) |
+| `signatures/feed.json` | signed attack patterns (also fetched from a remote feed) |
 
-```bash
-uv sync                                    # Python 3.13
-uv run python -m erp.seed                  # synthetic finance database
-uv run pytest                              # 168 tests: positive and negative per control, prints a coverage matrix
-uv run python -m dashboard.server          # http://127.0.0.1:8400
-```
-
-Local models need Ollama with `qwen3:8b` (agent and judge), `qwen3:0.6b` (injection screen). Gemini needs `.env` with `GCP_PROJECT_ID` and `SERVICE_ACCOUNT_JSON` (Vertex AI, `europe-west4`).
-
-## Ways to run it
+## More commands
 
 | What | Command |
 |---|---|
-| Dashboard: agent room, the layer, raw vs agent view of the data, evidence (audit, metrics, feed) | `uv run python -m dashboard.server` |
-| Remote attack feed (external threat-intel stand-in) | `uv run python -m demo.feed_server` |
+| Live tests from the terminal | `uv run python -m dashboard.testrun --model qwen3:8b` (add `--layer off` for the baseline) |
+| Before/after benchmark | `uv run python -m evals.run --agent qwen3:8b --mode baseline`, then `--mode protected` |
 | MCP gateway for any MCP client | `TOLLGATE_AGENT_TOKEN=$(uv run python -m tollgate.mcp_gateway token piotr) uv run python -m tollgate.mcp_gateway` |
-| MCP walkthrough (pinning, rug pull, no token) | `uv run python -m demo.mcp_demo` |
-| Terminal demo, layer process (one per agent) | `uv run python -m demo.layer --name local --port 7401 --judge qwen3:8b` |
-| Terminal demo, chat (talks only to its layer) | `uv run python -m demo.chat --model qwen3:8b --port 7401` |
-| Before/after evals (small: 1 run per scenario) | `uv run python -m evals.run --agent gemini-2.5-flash --mode baseline` then `--mode protected --judge gemini-2.5-flash` |
-| Report | `uv run python -m evals.report` |
-| Verify an audit log, export CSV | `uv run python -m tollgate.audit logs/audit__dashboard.jsonl` and `... audit csv logs/audit__dashboard.jsonl` |
+| Remote attack feed server | `uv run python -m demo.feed_server` |
+| Hosted mode (no Ollama, Gemini for every AI check) | `TOLLGATE_LOCAL_MODELS=off uv run python -m dashboard.server`; `Dockerfile` and `railway.json` deploy it |
+| Speed benchmark | `uv run python -m evals.bench` |
 
-Terminal chat commands: `/layer on`, `/layer off`, `/approve <id>`, `/pending`, `/new`, `/reset`, `/autoreset on`.
-
-## Edit live (no restart)
-
-| File | Controls | Reload |
-|---|---|---|
-| `policy.yaml` | preset, per-control modes, tools, data per role, people and limits, budgets, judge, feed, MCP, identity | within 0.5 s; invalid edits rejected, last good stays |
-| `contracts/finance_ap.yaml` | what each tool call is resolved and checked against | within 0.5 s |
-| `signatures/feed.json` | local attack signatures | after `uv run python -m tollgate.signatures sign` |
-| `demo/feed_remote/feed.json` | remote feed (served by `demo.feed_server`) | after `uv run python -m demo.feed_server publish`; `tamper` shows a rejected feed |
-| `tests/cases.yaml` | test cases, no Python needed; `expect_by_policy` follows the current policy | next test run |
-| Dashboard, The layer page | preset (lenient, balanced, strict) and every redact or block switch | next action, all chats |
-
-## Endpoints (dashboard)
-
-| Path | What |
-|---|---|
-| `/metrics` | Prometheus: decisions by tool and decision, controls fired, gate and AI latency histograms, tokens, spend, waiting approvals |
-| `/api/audit.csv` | the audit log as CSV |
-| `/api/audit/verify` | hash-chain check |
-| `/api/feed` | active feed version, source, remote status, signature list |
-| `/api/metrics.json`, `/api/audit/recent` | the same numbers and records as JSON (used by the Evidence page) |
-| `/api/policy` | GET and POST: preset and control switches |
+Monitoring endpoints: `/metrics` (Prometheus), `/api/audit.csv`, `/api/audit/verify`, `/api/telemetry.json`, `/api/report`.
 
 ## Layout
 
 ```
 tollgate/   the layer (gate.py is the pipeline; one module per control)
 contracts/  effect contracts (YAML)
-dashboard/  FastAPI server + vanilla JS views
-demo/       demo world, terminal chat and layer, MCP upstream, feed server, MCP walkthrough
+dashboard/  FastAPI server and the web UI
 erp/        synthetic database and mock ERP
-evals/      scenarios, deterministic harm judge, runner, report, bench, incident replays
-tests/      pytest suites + cases.yaml + incident reproducers
-docs/       architecture, OWASP mapping, demo script
+evals/      before/after scenarios and the harm judge
+tests/      control tests, live test cases, past incidents
+docs/       architecture, configuration, OWASP mapping, demo script, slides
 ```
 
-All data is synthetic: `.example` email domains, `SYN`-prefixed national IDs, unassigned bank codes, AWS's own documentation example key.
+All data is synthetic: `.example` email domains, `SYN` national IDs, unassigned bank codes, and AWS's own documentation example key.

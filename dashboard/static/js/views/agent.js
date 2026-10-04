@@ -1,6 +1,6 @@
 // THE AGENT ROOM: the conversation in the middle, what the layer decided beside it, live.
 import { api } from "../api.js";
-import { icon, esc, md, tool, DECISION, effectText, timeAgo, quietNotes, plainWhat, plainWhy, judgeLine, details } from "../ui.js";
+import { icon, esc, md, tool, DECISION, effectText, timeAgo, quietNotes, plainWhat, plainWhy, judgeLine, details, activityText } from "../ui.js";
 
 const STARTERS = [
   { text: "Please pay invoice INV-7002 from Vistula.", go: true },
@@ -71,7 +71,31 @@ export function mount(el, state, actions) {
 }
 
 export function onState() { drawNote(); drawPane(); }
-export function onPoll(_s, _a, changed) { if (changed) drawPane(); }
+export async function onPoll(_s, _a, changed) {
+  if (changed) drawPane();
+  const busy = (S.state.conversations || []).some((c) => c.status === "running" || c.status === "queued");
+  if (busy || wasBusy) {   // chats running in the background (a test run): keep their status and steps live
+    wasBusy = busy;
+    if (S.running) return;
+    S.state = await api.state();
+    drawChats();
+    drawThread();
+  }
+}
+let wasBusy = false;
+
+// What a busy chat is doing, in one line: running and how long, the last thing it did, and a warning when it is slow.
+function liveLine(c) {
+  if (c.status === "queued") return `<span class="chat-row-sub chat-live">${icon("clock")} Waiting to start</span>`;
+  if (c.status !== "running") return "";
+  const slow = c.quiet_s >= 60;
+  return `<span class="chat-row-sub chat-live ${slow ? "is-slow" : ""}">${icon("loading", "spin")} Working ${c.seconds} s · ${c.steps} ${c.steps === 1 ? "step" : "steps"} · ${esc(activityText(c.activity))}${slow ? ` (${Math.round(c.quiet_s / 60)} min with no news)` : ""}</span>`;
+}
+
+function activityNote(L) {
+  const slow = L.quiet_s >= 60;
+  return `<div class="live-note ${slow ? "is-slow" : ""}">${icon("loading", "spin")} Now: ${esc(activityText(L.activity))}${L.quiet_s >= 5 ? `, for ${L.quiet_s} s` : ""}.${slow ? " Still working: local models can take minutes per step on a laptop." : ""}</div>`;
+}
 
 function drawNote() {
   const on = S.state.layer;
@@ -86,18 +110,42 @@ function drawChats() {
   const list = root.querySelector("#chats");
   if (!list) return;
   const chats = S.state.conversations || [];
-  list.innerHTML = chats.map((c) => `
+  const html = chats.map((c) => `
     <button class="chat-row ${c.current ? "is-on" : ""} ${c.empty ? "is-empty" : ""}" data-chat="${c.id}" ${c.current ? 'aria-current="true"' : ""}>
       <span class="chat-row-title">${c.test ? `<span class="chat-tag">Test</span>` : ""}${esc(c.title)}</span>
-      <span class="chat-row-sub">${c.empty ? "Nothing asked yet" : `${timeAgo(c.updated)} · ${Math.ceil(c.messages / 2)} ${c.messages > 2 ? "questions" : "question"}`} · ${esc(S.state.models[c.model] || c.model)}</span>
+      ${liveLine(c) || `<span class="chat-row-sub">${c.empty ? "Nothing asked yet" : `${timeAgo(c.updated)} · ${Math.ceil(c.messages / 2)} ${c.messages > 2 ? "questions" : "question"}`} · ${esc(S.state.models[c.model] || c.model)}</span>`}
     </button>`).join("");
-  list.querySelectorAll("[data-chat]").forEach((b) => (b.onclick = () => A.openChat(b.dataset.chat)));
+  if (list.dataset.html === html) return;   // nothing changed: no redraw, no flicker
+  const top = list.scrollTop;
+  list.innerHTML = html;
+  list.dataset.html = html;
+  list.scrollTop = top;                      // a redraw never moves the list
+  list.querySelectorAll("[data-chat]").forEach((b) => (b.onclick = () => {
+    if (b.classList.contains("is-on")) return;
+    list.querySelectorAll(".chat-row.is-on").forEach((x) => x.classList.remove("is-on"));
+    b.classList.add("is-on");                // feedback before the server answers
+    A.openChat(b.dataset.chat);
+  }));
+}
+
+// Another chat of the same person and model: update the parts that change, keep the page (and the list) where it is.
+export function switchChat() {
+  const cur = (S.state.conversations || []).find((c) => c.current);
+  root.querySelector("#chat-title").textContent = cur?.title || "New chat";
+  drawChats();
+  drawThread(true);
+  drawNote();
+  drawPane();
 }
 
 // ---------------- the conversation ----------------
-function drawThread() {
+function drawThread(jump = false) {
   const col = root.querySelector("#column");
   const scroll = root.querySelector("#scroll");
+  const atBottom = scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight < 80;
+  const key = JSON.stringify([S.state.conversation, S.state.thread, S.state.live, S.running]);
+  if (!jump && col.dataset.key === key) return;
+  col.dataset.key = key;
   const thread = S.state.thread || [];
   if (!thread.length) {
     scroll.classList.add("is-empty");
@@ -121,10 +169,18 @@ function drawThread() {
     if (m.role === "you") parts.push(`<div class="agent-exchange"><div class="agent-you">${esc(m.text)}</div>`);
     else parts.push(`${them(m.steps || [], m.seconds, false, m.text, S.state.layer)}</div>`);
   }
-  if (thread[thread.length - 1]?.role === "you") parts.push("</div>");
+  const L = S.state.live || {};
+  if (thread[thread.length - 1]?.role === "you") {
+    if (!S.running && L.status === "running") {
+      parts.push(`${them(L.steps_so_far || [], L.seconds, true, "", S.state.layer, null, true)}${activityNote(L)}`);
+    } else if (!S.running && L.status === "queued") {
+      parts.push(`<div class="agent-them"><span class="agent-them-mark">${icon("clock")}</span><div class="agent-them-body"><div class="live-note">Waiting to start: ${esc(L.activity)}.</div></div></div>`);
+    }
+    parts.push("</div>");
+  }
   col.innerHTML = parts.join("");
   bindWork(col);
-  scroll.scrollTop = scroll.scrollHeight;
+  if (jump || atBottom) scroll.scrollTop = scroll.scrollHeight;   // don't yank a reader who scrolled up
 }
 
 function workLine(steps, seconds, live, layerOn) {

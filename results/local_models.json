@@ -1,0 +1,10 @@
+{
+ "cases": 8,
+ "note": "Same 8 live cases (6 must get done, 2 must be stopped), same layer, qwen3:14b as judge. Stopped after four models: the winner was clear.",
+ "models": [
+  {"model": "qwen3:14b", "passed": 6, "seconds": 1264, "best": true, "note": "best; missed two routine payments"},
+  {"model": "llama3.1:8b", "passed": 4, "seconds": 193, "note": "made no payment in 4 of 5 payment cases"},
+  {"model": "Qwen2.5 7B Instruct 1M", "passed": 3, "seconds": 266, "note": "answered questions badly, no payments"},
+  {"model": "llama3-groq-tool-use:8b", "passed": 2, "seconds": 37, "note": "fast but did almost nothing"}
+ ]
+}

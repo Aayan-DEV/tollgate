@@ -26,7 +26,7 @@ function draw() {
   const decisions = S.events.filter((e) => e.kind === "decision").slice().reverse().slice(0, 60);
   page.innerHTML = `
     <div class="page-head"><div>
-      <h1>The layer</h1>
+      <h1>The layer: ${esc(S.state.models[S.state.model] || S.state.model)}</h1>
       <p>Every action the agent takes passes through here first. It works out what the action would really do, checks it, and lets it through, holds it for a person, or blocks it.</p>
     </div><div class="ph-right"><span class="tb-state${S.state.layer ? "" : " is-off"}">${icon(S.state.layer ? "shield" : "unlock")}${S.state.layer ? "On" : "Off"}</span></div></div>
     <div class="pn-stack">

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import os
 import time
 from collections import deque
 from dataclasses import dataclass, field
@@ -29,9 +30,17 @@ from tollgate.signatures import RemoteFeed
 from tollgate.state import StateStore
 
 ROOT = Path(__file__).resolve().parents[1]
-AUDIT_PATH = ROOT / "logs" / "audit__dashboard.jsonl"
-MODELS = {"gemini-2.5-flash": "Gemini 2.5 Flash", "qwen3:8b": "Qwen3 8B (local)"}
-JUDGE_FOR = {"gemini-2.5-flash": "gemini-2.5-flash", "qwen3:8b": "qwen3:8b"}
+AUDIT_PATH = Path(os.environ.get("TOLLGATE_AUDIT_PATH", ROOT / "logs" / "audit__dashboard.jsonl"))   # a demo instance writes its own log
+# Hosted without Ollama (TOLLGATE_LOCAL_MODELS=off): only Gemini is offered, and the injection screen uses it too.
+LOCAL_MODELS = os.environ.get("TOLLGATE_LOCAL_MODELS", "on").lower() not in ("off", "0", "false")
+MODELS = {"gemini-2.5-flash": "Gemini 2.5 Flash", **({"qwen3:8b": "Qwen3 8B (local)"} if LOCAL_MODELS else {})}
+BEST_LOCAL = "qwen3:8b"     # won the local benchmark (4 of 4 cases; llama3.1:8b and Qwen2.5 7B 3, mistral 2, llama3-groq 1)
+LOCAL_JUDGE = "qwen3:8b"    # one local model for agent, judge and injection confirm: one model in memory, no swapping
+JUDGE_FOR = {"gemini-2.5-flash": "gemini-2.5-flash"}
+
+
+def judge_for(model: str) -> str:
+    return JUDGE_FOR.get(model, LOCAL_JUDGE)
 TABLE_LIMIT = 50
 # The per-control switches the dashboard offers: (policy key, what it governs, the modes it can take).
 CONTROL_SWITCHES = [
@@ -70,6 +79,18 @@ class Conversation:
     updated: float = field(default_factory=time.time)
     test: str | None = None          # the test run it belongs to; such chats run in their own fresh world
     extra: dict = field(default_factory=dict)   # a test case's own policy overrides
+    # live state, shown in the chat list, the thread and the Tests page
+    status: str = "idle"             # idle | queued | running | done | error | stopped
+    activity: str = ""               # what it is doing now: "waiting for the model", "checking: pay_invoice", a retry
+    activity_ts: float = 0.0
+    turn_started: float = 0.0
+    live: list = field(default_factory=list)   # this turn's steps so far
+
+    def live_view(self) -> dict:
+        now = time.time()
+        return {"status": self.status, "activity": self.activity,
+                "quiet_s": round(now - self.activity_ts) if self.activity_ts else 0,
+                "seconds": round(now - self.turn_started) if self.status == "running" else 0, "steps": len(self.live)}
 
     @property
     def title(self) -> str:
@@ -92,7 +113,23 @@ class Runtime:
     # ---------- people and policy ----------
     @property
     def policy(self):
-        return self.policy_store.get()
+        p = self.policy_store.get()
+        if self.policy_store.sha != getattr(self, "_seen_sha", self.policy_store.sha):
+            self._refresh_chats(p)   # policy.yaml changed: open chats get new people, roles and limits too
+        self._seen_sha = self.policy_store.sha
+        return p
+
+    def _refresh_chats(self, pol) -> None:
+        people = {x.id: x for x in pol.people}
+        for c in getattr(self, "convos", {}).values():
+            p = people.get(c.person_id)
+            if p is None:
+                continue
+            try:
+                c.gate.store.set_overrides({**self._base_overrides(p, c.model), **self.control_overrides, **c.extra})
+            except ValueError:
+                continue   # an override no longer fits the new file: that chat keeps its last good policy
+            c.token = c.gate.agent_token = c.gate.issue_token(max_eur=p.max_action_eur)
 
     @property
     def person(self) -> Person:
@@ -105,7 +142,7 @@ class Runtime:
     def reset(self) -> None:
         self.store = new_store()
         self.state = StateStore(":memory:")
-        self.events: deque[dict] = deque(maxlen=800)
+        self.events: deque[dict] = deque(maxlen=6000)
         self.approvals: dict[int, dict] = {}
         self.totals = {"usd": 0.0, "tokens": 0}
         self.convos: dict[str, Conversation] = {}
@@ -147,9 +184,9 @@ class Runtime:
             self.new_conversation()
 
     def conversations_view(self) -> list[dict]:
-        mine = [c for c in self.convos.values() if c.person_id == self.person_id]
+        mine = [c for c in self.convos.values() if c.person_id == self.person_id and c.model == self.model]
         return [{"id": c.id, "title": c.title, "updated": c.updated, "model": c.model, "current": c.id == self.current,
-                 "messages": len(c.thread), "empty": not c.thread, "test": c.test}
+                 "messages": len(c.thread), "empty": not c.thread, "test": c.test, **c.live_view()}
                 for c in sorted(mine, key=lambda c: -c.updated)]
 
     def new_conversation(self) -> None:
@@ -172,6 +209,7 @@ class Runtime:
                     user_entities=p.entities, acting_for=p.id, agent_id="ap-agent",
                     enabled=self.layer_on if enabled is None else enabled, state=state, today=TODAY, audit_path=AUDIT_PATH,
                     policy_overrides={**self._base_overrides(p, model), **self.control_overrides, **(extra_overrides or {})})
+        gate.agent_model = model
         gate.listeners.append(lambda ev, pid=p.id, cid=cid, t=test: self._record(ev, pid, cid, t))
         # The agent's identity: every tool in the catalog, at most this person's per-action ceiling.
         token = gate.issue_token(max_eur=p.max_action_eur)
@@ -188,8 +226,10 @@ class Runtime:
     @staticmethod
     def _base_overrides(p: Person, model: str) -> dict:
         """What makes a gate this person's: their data role and limit, and the judge for the chat's model."""
+        hosted = {} if LOCAL_MODELS else {"controls.injection.screen_model": "gemini-2.5-flash",
+                                          "controls.injection.confirm_model": "gemini-2.5-flash"}
         return {"data.role": p.data_role, "payments.require_approval_above_eur": p.approval_limit_eur,
-                "justify.judge_model": JUDGE_FOR[model], "state.path": ":memory:"}
+                "justify.judge_model": judge_for(model), "state.path": ":memory:", **hosted}
 
     def set_policy(self, preset: str | None = None, key: str | None = None, value: object = None, clear: bool = False) -> None:
         """Switch the preset or one control for every chat, live. Raises ValueError for an unknown preset or mode."""
@@ -245,7 +285,8 @@ class Runtime:
         self.approvals[aid] = {"id": aid, "tool": tool, "args": args, "provider": provider, "effect": ev.get("effect", tool),
                                "plain": ev.get("plain"), "plain_reason": ev.get("plain_reason", ""), "reason": ev.get("reason", ""), "amount": amount, "requested_by": p.name,
                                "requested_rank": p.rank, "status": "waiting", "gate": c.gate, "token": token,
-                               "caller": ev.get("caller"), "ts": time.time(), "conversation": c.id, "test": c.test}
+                               "caller": ev.get("caller"), "ts": time.time(), "conversation": c.id, "test": c.test,
+                               "model": c.model}
         return aid
 
     def can_approve(self, item: dict, p: Person) -> tuple[bool, str]:
@@ -287,7 +328,7 @@ class Runtime:
     def approvals_view(self) -> list[dict]:
         p = self.person
         out = []
-        for item in sorted(self.approvals.values(), key=lambda x: -x["id"]):
+        for item in sorted((a for a in self.approvals.values() if a.get("model") == self.model), key=lambda x: -x["id"]):
             ok, why = self.can_approve(item, p)
             out.append({k: v for k, v in item.items() if k not in ("gate", "token")} | {"can_approve": ok and item["status"] == "waiting",
                                                                           "why_not": why})
@@ -326,14 +367,61 @@ class Runtime:
                 "hidden": out.masked_columns, "masked_values": n, "view": "agent"}
 
     # ---------- the security view ----------
+    def mine(self, events) -> list[dict]:
+        """Everything on screen belongs to the agent model picked at the top left."""
+        return [e for e in events if e.get("agent_model") == self.model]
+
     def overview(self) -> dict:
-        decisions = [e for e in self.events if e["kind"] == "decision"]
+        events = self.mine(self.events)
+        decisions = [e for e in events if e["kind"] == "decision"]
+        models = [e for e in events if e["kind"] == "model"]
         by = {k: sum(1 for e in decisions if e["decision"] == k) for k in ("allow", "ask", "block", "off")}
         gate_ms = sorted(e["gate_ms"] for e in decisions if e["decision"] != "off")
         p95 = gate_ms[min(len(gate_ms) - 1, int(0.95 * len(gate_ms)))] if gate_ms else 0.0
-        waiting = sum(1 for a in self.approvals.values() if a["status"] == "waiting")
-        return {"decisions": len(decisions), **by, "waiting": waiting, "usd": round(self.totals["usd"], 5),
-                "tokens": self.totals["tokens"], "gate_p95_ms": round(p95, 2)}
+        waiting = sum(1 for a in self.approvals.values() if a["status"] == "waiting" and a.get("model") == self.model)
+        return {"decisions": len(decisions), **by, "waiting": waiting, "usd": round(sum(e["usd"] for e in models), 5),
+                "tokens": sum(e["tokens_in"] + e["tokens_out"] for e in models), "gate_p95_ms": round(p95, 2), "model": self.model}
+
+    def report(self) -> dict:
+        """The management summary for the selected agent: what was checked, stopped, protected and spent."""
+        import re as _re
+        from collections import Counter
+        events = self.mine(self.events)
+        dec = [e for e in events if e["kind"] == "decision" and e["decision"] != "off"]
+        models = [e for e in events if e["kind"] == "model"]
+
+        def amount(e) -> float:
+            try:
+                return float((e.get("args") or {}).get("amount_eur") or 0)
+            except (TypeError, ValueError):
+                return 0.0
+        pay = [e for e in dec if e["tool"] == "pay_invoice"]
+        stopped_pay = {(e["session"], (e.get("args") or {}).get("invoice_id")): amount(e) for e in pay if e["decision"] in ("block", "ask")}
+        paid = {(e["session"], (e.get("args") or {}).get("invoice_id")): amount(e) for e in pay if e["decision"] == "allow"}
+        findings = [f for e in dec for f in e.get("findings") or []]
+        masked = sum(int(m[1]) for f in findings if (m := _re.match(r"(\d+) sensitive values masked", f[2])))
+        deciding = Counter(f[0] for e in dec for f in e.get("findings") or [] if f[1] == e["decision"] and e["decision"] != "allow")
+        approvals = [a for a in self.approvals.values() if a.get("model") == self.model]
+        usd = sum(e["usd"] for e in models)
+        start = min((e["ts"] for e in dec), default=time.time())
+        span = max(60.0, time.time() - start)
+        step = 60 if span <= 3600 else 300 if span <= 6 * 3600 else 3600
+        buckets: dict[int, Counter] = {}
+        for e in dec:
+            buckets.setdefault(int(e["ts"] // step * step), Counter())[e["decision"]] += 1
+        return {
+            "model": self.model, "checked": len(dec), "allowed": sum(e["decision"] == "allow" for e in dec),
+            "blocked": sum(e["decision"] == "block" for e in dec), "held": sum(e["decision"] == "ask" for e in dec),
+            "money_stopped_eur": round(sum(stopped_pay.values()), 2), "payments_stopped": len(stopped_pay),
+            "money_paid_eur": round(sum(paid.values()), 2), "payments_made": len(paid),
+            "data_refused": sum(f[0] == "data.denied" for f in findings), "values_masked": masked,
+            "hidden_orders_removed": sum(f[0].startswith("injection.") for f in findings),
+            "secrets_caught": sum(f[0].startswith("secrets.") for f in findings),
+            "approvals": {k: sum(a["status"] == k for a in approvals) for k in ("waiting", "approved", "declined")},
+            "usd": round(usd, 4), "tokens": sum(e["tokens_in"] + e["tokens_out"] for e in models),
+            "chats": len({e["session"] for e in dec}), "top_rules": deciding.most_common(8),
+            "timeline": {"step": step, "rows": [{"t": t, **c} for t, c in sorted(buckets.items())]},
+        }
 
     def controls(self) -> list[dict]:
         pol = self.policy
@@ -356,7 +444,7 @@ class Runtime:
         how = {"off": "off", "rules": "rules only",
                "cascade": f"rules, then {inj.screen_model} on grey text, confirmed by {inj.confirm_model}"}[inj.mode]
         out.append({"group": "Content", "name": "hidden instructions", "detail": f"{how}; {inj.action} at score {inj.threshold}"})
-        out.append({"group": "AI", "name": "justify judge", "detail": f"must quote the user; {JUDGE_FOR[self.model]}; "
+        out.append({"group": "AI", "name": "justify judge", "detail": f"must quote the user; {judge_for(self.model)}; "
                                                                       f"if it cannot answer: {pol.justify.on_error}"})
         out.append({"group": "Identity", "name": "agent tokens", "detail": f"signed per agent; delegation only narrows, "
                                                                            f"at most {pol.identity.max_delegation_depth} deep"})
@@ -397,9 +485,10 @@ class Runtime:
     def state_view(self) -> dict:
         return {"layer": self.layer_on, "person": self.person.model_dump(), "people": self.people_view(),
                 "session": self.gate.ledger.session_id, "conversation": self.current,
+                "live": {**self.convo.live_view(), "steps_so_far": self.convo.live if self.convo.status == "running" else []},
                 "conversations": self.conversations_view(),
-                "model": self.model, "models": MODELS, "thread": self.thread, "judge": JUDGE_FOR[self.model],
+                "model": self.model, "models": MODELS, "thread": self.thread, "judge": judge_for(self.model),
                 "open_invoices": len(self.store.t_list_open_invoices())}
 
     def events_after(self, after: int) -> list[dict]:
-        return [json.loads(json.dumps(e, default=str)) for e in self.events if e["id"] > after]
+        return [json.loads(json.dumps(e, default=str)) for e in self.mine(self.events) if e["id"] > after]

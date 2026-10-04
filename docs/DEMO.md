@@ -4,10 +4,10 @@
 
 ```bash
 uv run python -m dashboard.server        # terminal 1, then open http://127.0.0.1:8400
-uv run pytest                            # terminal 2, optional: 168 tests in about 30 s
+uv run pytest                            # terminal 2, optional: 174 tests in about 30 s
 ```
 
-1. `.env` present for Gemini. For the local model: open the model picker (top left) and press **Start** on Qwen3 8B. It loads into memory with the injection-screen model (about 10 s to 1 min) and becomes pickable when it says Ready. Ollama is launched for you if it is not running.
+1. `.env` present for Gemini. For the local model: open the model picker (top left) and press **Start** on Qwen3 8B (the local model). It loads into memory with the injection-screen model (about 10 s to 1 min) and becomes pickable when it says Ready. Ollama is launched for you if it is not running.
 2. Do **not** start the feed server yet (step 7 shows it arriving).
 3. In the dashboard: person **Piotr (AP Clerk)**, model **Gemini 2.5 Flash**, layer **On**, preset **Balanced**. Use **Reset the database** between parts if you want a clean queue.
 
@@ -80,7 +80,7 @@ Expected: tools listed through the gateway; wrong amount **blocked**; no token *
 
 1. Open **Tests**. Press **Run with the layer on**: 18 chats start, 6 at a time, each in its own copy of the data. Expected: 18 of 18 in about 40 s, each card saying "Done, as asked" or "Stopped by the layer".
 2. Press **Run with the layer off**. Expected: about 7 of 18; the "should not happen" cards turn red with what went through.
-3. **Open the chat** on any card to see the full conversation. **Run the control tests** shows 169 passing, grouped by what they protect.
+3. **Open the chat** on any card to see the full conversation. **Run the control tests** shows 174 passing, grouped by what they protect.
 4. Clean up afterwards with the trash button above the chat list (deletes every chat; the data and the audit log stay).
 
 ## 10. Judges edit things live

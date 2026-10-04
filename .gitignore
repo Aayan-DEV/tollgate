@@ -23,3 +23,9 @@ experiments/baseline/logs/
 # early JS experiments tied to a local path (superseded by evals/)
 scripts/
 experiments/
+
+# build output
+docs/deck/shots/
+docs/deck/pages/
+demo-video/
+.agents/

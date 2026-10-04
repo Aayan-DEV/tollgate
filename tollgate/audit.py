@@ -10,9 +10,11 @@ decisions are.
 from __future__ import annotations
 
 import csv
+import fcntl
 import hashlib
 import io
 import json
+import os
 import sys
 import threading
 import time
@@ -50,13 +52,37 @@ class AuditLog:
                 self._prev = json.loads(last)["hash"]
 
     def write(self, event: dict) -> None:
-        with self._lock:
-            record = {"ts": round(time.time(), 3), **event, "prev": self._prev}
-            body = json.dumps(record, sort_keys=True, default=str)
-            record["hash"] = hashlib.sha256(body.encode()).hexdigest()
-            with self.path.open("a") as fh:
-                fh.write(json.dumps(record, sort_keys=True, default=str) + "\n")
-            self._prev = record["hash"]
+        """Append one record. Several processes may share the file (more gate processes, a CLI test run next to the
+        dashboard): an exclusive file lock serialises them and the previous hash is read from the file itself."""
+        with self._lock, self.path.open("a+b") as fh:
+            fcntl.flock(fh, fcntl.LOCK_EX)
+            try:
+                self._prev = _last_hash(fh) or self._prev
+                record = {"ts": round(time.time(), 3), **event, "prev": self._prev}
+                body = json.dumps(record, sort_keys=True, default=str)
+                record["hash"] = hashlib.sha256(body.encode()).hexdigest()
+                fh.write((json.dumps(record, sort_keys=True, default=str) + "\n").encode())
+                fh.flush()
+                self._prev = record["hash"]
+            finally:
+                fcntl.flock(fh, fcntl.LOCK_UN)
+
+
+def _last_hash(fh) -> str | None:
+    """The hash of the file's last record, reading backwards from the end (records are a few KB at most)."""
+    end = fh.seek(0, os.SEEK_END)
+    if end == 0:
+        return None
+    chunk, pos = b"", end
+    while pos > 0:
+        step = min(65536, pos)
+        pos -= step
+        fh.seek(pos)
+        chunk = fh.read(step) + chunk
+        lines = chunk.rstrip(b"\n").split(b"\n")
+        if len(lines) > 1 or pos == 0:
+            return json.loads(lines[-1])["hash"]
+    return None
 
 
 def verify(path: str | Path) -> tuple[bool, int, str]:
@@ -80,11 +106,11 @@ def recent(path: str | Path, limit: int = 100) -> list[dict]:
     return [json.loads(line) for line in reversed(lines[-limit:])]
 
 
-CSV_COLUMNS = ["time_utc", "session", "tool", "kind", "decision", "effect", "deciding_controls", "reason", "quiet_actions",
+CSV_COLUMNS = ["time_utc", "agent_model", "caller", "acting_for", "session", "tool", "kind", "decision", "effect", "deciding_controls", "reason", "quiet_actions",
                "judge_decision", "judge_quote", "judge_quote_verified", "latency_ms", "policy_sha", "feed_version", "hash"]
 
 
-def to_csv(path: str | Path) -> str:
+def to_csv(path: str | Path, model: str | None = None) -> str:
     """The audit log as CSV for a spreadsheet or a GRC tool: one row per decision, newest last."""
     buf = io.StringIO()
     w = csv.writer(buf)
@@ -94,10 +120,13 @@ def to_csv(path: str | Path) -> str:
     with Path(path).open() as fh:
         for line in fh:
             r = json.loads(line)
+            if model and r.get("agent_model") != model:
+                continue
             deciding = [f for f in r.get("findings", []) if f[1] == r["decision"] and r["decision"] != "allow"]
             quiet = [f[2] for f in r.get("findings", []) if f[1] == "allow" and f[0].startswith(("injection.", "secrets.", "data."))]
             j = r.get("judge") or {}
-            w.writerow([datetime.fromtimestamp(r["ts"], timezone.utc).isoformat(timespec="seconds"), r.get("session"), r.get("tool"),
+            w.writerow([datetime.fromtimestamp(r["ts"], timezone.utc).isoformat(timespec="seconds"), r.get("agent_model"),
+                        r.get("caller"), r.get("acting_for"), r.get("session"), r.get("tool"),
                         r.get("kind"), r.get("decision"), r.get("effect"), " ".join(f[0] for f in deciding),
                         "; ".join(f[2] for f in deciding), "; ".join(quiet), j.get("decision", ""), j.get("quote", ""),
                         j.get("quote_ok", ""), r.get("latency_ms"), r.get("policy_sha"), r.get("feed_version"), r.get("hash")])

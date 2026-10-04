@@ -6,8 +6,11 @@ import * as layer from "./views/layer.js";
 import * as data from "./views/data.js";
 import * as evidence from "./views/evidence.js";
 import * as tests from "./views/tests.js";
+import * as config from "./views/config.js";
+import * as benchmark from "./views/benchmark.js";
+import * as how from "./views/how.js";
 
-const VIEWS = { agent, layer, data, tests, evidence };
+const VIEWS = { agent, layer, how, data, tests, benchmark, evidence, config };
 export const S = { state: null, view: "agent", events: [], lastEvent: 0, overview: null, approvals: [], controls: [], running: false };
 
 const actions = {
@@ -27,6 +30,11 @@ const actions = {
   async setModel(id) {
     if (S.running || id === S.state.model) return;
     S.state = await api.model(id);
+    // Every page belongs to the selected agent: start from its own events, approvals and numbers.
+    S.events = [];
+    S.lastEvent = 0;
+    S.overview = null;
+    await refresh();
     shell();
     mountView();
   },
@@ -38,9 +46,15 @@ const actions = {
   },
   async openChat(id) {
     if (S.running || id === S.state.conversation) return;
+    const prev = S.state;
     const next = await api.openChat(id);
     if (next.error) return;
     S.state = next;
+    // Same person and model: swap the chat in place. Otherwise the page header changes too, so rebuild it.
+    if (S.view === "agent" && prev.person.id === next.person.id && prev.model === next.model) {
+      agent.switchChat();
+      return;
+    }
     shell();
     mountView();
   },

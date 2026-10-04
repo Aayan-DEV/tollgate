@@ -141,3 +141,10 @@ export function details(e) {
     : `rules ${fmtMs(e.gate_ms || 0)}${e.judge_ms ? `, AI ${(e.judge_ms / 1000).toFixed(1)} s` : ""}`]);
   return `<details class="more"><summary>Details</summary><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join("")}</dl></details>`;
 }
+
+// "checking: pay_invoice" -> "checking a payment"; other activity lines are already plain words.
+export function activityText(a) {
+  const m = /^(the payments helper is )?checking: (\w+)$/.exec(a || "");
+  if (!m) return a || "thinking";
+  return `${m[1] || ""}checking: ${tool(m[2]).label.toLowerCase()}`;
+}

@@ -33,7 +33,7 @@ from tollgate.injection import Classifier, rules_score
 from tollgate.judge import Judge
 from tollgate import identity as ident
 from tollgate.ledger import Ledger
-from tollgate.metrics import REGISTRY
+from tollgate import metrics
 from tollgate.llm.base import Chat, Turn
 from tollgate.normalize import canonical_args, scan_text
 from tollgate.policy import PolicyStore
@@ -67,6 +67,18 @@ def _judge_plain(j: dict) -> str:
     if "unavailable" in str(j.get("reason", "")):
         return "The AI checker did not answer, so to be safe a person decides."
     return "It is not clear you asked for this, so a person decides."
+
+
+class _Laps:
+    """Per-stage timing of one call (performance telemetry): each lap adds the time since the last one."""
+
+    def __init__(self) -> None:
+        self.t, self.ms = time.perf_counter(), {}
+
+    def lap(self, stage: str) -> None:
+        now = time.perf_counter()
+        self.ms[stage] = round(self.ms.get(stage, 0.0) + (now - self.t) * 1000, 3)
+        self.t = now
 
 
 class Connector(Protocol):
@@ -104,6 +116,7 @@ class Gate:
         self.listeners: list[Callable[[dict], None]] = []   # e.g. the dashboard: one dict per decision or model call
         self.last_event: dict | None = None
         self._synced = 0.0
+        self.agent_model: str | None = None     # which agent model this gate serves (tags telemetry and audit records)
         self.agent_token = self.issue_token()   # the in-process agent's own identity; outside callers present theirs
 
     @property
@@ -118,6 +131,12 @@ class Gate:
             if t["name"] in p.data.sql_tools:
                 t = {**t, "description": "Run a read-only SQL query (SQLite) against the finance database. Tables you may "
                                          f"read, with their columns: {schema_text(self._conn.db, p.data)}."}
+            elif "iban" in (t.get("parameters", {}).get("properties") or {}) and "iban" in p.data.mask:
+                # The layer masks account numbers in what the agent reads, so say how to pass one back.
+                # No example value: small models copy an example account number instead of looking the real one up.
+                t = {**t, "description": t["description"] + " For iban, pass the supplier's account exactly as get_vendor "
+                                                             "shows it, even when it is masked with dots; the payment goes to "
+                                                             "the verified account on file."}
             out.append(t)
         return out
 
@@ -165,9 +184,9 @@ class Gate:
         return usd
 
     def _emit(self, event: dict) -> None:
-        event = {"ts": time.time(), "session": self.ledger.session_id, "layer": self.enabled, **event}
+        event = {"ts": time.time(), "session": self.ledger.session_id, "layer": self.enabled, "agent_model": self.agent_model, **event}
         self.last_event = event
-        REGISTRY.observe(event)
+        metrics.observe(event)
         for fn in self.listeners:
             fn(event)
 
@@ -265,9 +284,12 @@ class Gate:
             self._record(Verdict(Decision.ALLOW, Effect(name, "unguarded", f"{name} (no protection)"), []), args, t0, quiet=True)
             return result
 
+        laps = _Laps()
         args = canonical_args(args)
+        laps.lap("normalize")
         kind = p.tools.kind(name)
         findings, caller = self._identity(token, name, args, p)
+        laps.lap("identity")
         self.caller = caller
         result: object = None
         judged: dict | None = None
@@ -287,6 +309,7 @@ class Gate:
         if quarantined:
             findings.append(Finding("mcp.quarantine", Decision.BLOCK, f"tool {name} is quarantined: {quarantined}",
                                     plain="This outside tool changed or hides instructions, so it is locked until a person checks it."))
+        laps.lap("known_bad")
 
         if any(f.decision == Decision.BLOCK for f in findings):
             effect = Effect(name, kind, f"{name} by {caller}")
@@ -294,8 +317,10 @@ class Gate:
             effect = Effect(name, "read", f"query_db: {' '.join(str(args.get('sql', '')).split())[:90]}")
             lim, _ = limits.reserve(p.limits, name, args, self.state, self.agent_id, self.ledger.session_id)
             findings += lim
+            laps.lap("limits")
             if not any(f.decision == Decision.BLOCK for f in findings):
                 result = self._query(args, p, findings)
+            laps.lap("data_guard")
         else:
             contract = self.contracts.get(name)
             effect, cf, ctx = evaluate(name, args, kind, contract, self.fact_fns, self.store.lookup)
@@ -314,15 +339,18 @@ class Gate:
                                         "irreversible actions need a human",
                                         plain="Earlier in this chat a document tried to give the AI orders, so a person checks "
                                               "anything that cannot be undone."))
+            laps.lap("contract")
             if kind == "irreversible" and not any(f.decision != Decision.ALLOW for f in findings):
                 lim, held = limits.reserve(p.limits, name, args, self.state, self.agent_id, self.ledger.session_id)
                 findings += lim
+            laps.lap("limits")
             if kind == "irreversible" and p.justify.enabled and not any(f.decision != Decision.ALLOW for f in findings):
                 judged = await self.judge.justify(effect, self.ledger, p.justify, p.justify.judge_model, self.today)
                 if not judged.get("cached") and judged["tokens"] != (0, 0):
                     budget.settle(p.justify.judge_model, *judged["tokens"], judged["ms"], self.ledger, p, judge=True)
                 findings.append(Finding("justify", judged["decision"], judged["reason"], deterministic=False,
                                         plain=_judge_plain(judged)))
+            laps.lap("judge")
 
         decision = Decision.strictest([f.decision for f in findings])
         verdict = Verdict(decision, effect, findings, judged)
@@ -330,11 +358,13 @@ class Gate:
             decision = verdict.decision = Decision.ALLOW
             findings.append(Finding("human.approved", Decision.ALLOW, "approved by a human"))
 
+        laps.lap("decide")
         executed = False
         if decision == Decision.ALLOW and result is None:
             result, executed = await self._execute(name, args, kind, contract, ctx, findings, verdict)
             decision = verdict.decision
         limits.settle(held, executed, self.state)
+        laps.lap("execute")
         if decision == Decision.ASK:
             self.ledger.facts["held"] += 1
             result = {"status": "held_for_approval", "reason": verdict.reason,
@@ -342,6 +372,10 @@ class Gate:
         elif decision == Decision.BLOCK:
             self.ledger.facts["blocked"] += 1
             result = {"status": "blocked", "reason": verdict.reason}
+            if all(f.fixable for f in findings if f.decision == Decision.BLOCK):
+                # Only the agent's own values were wrong (a guessed id or amount). The checks stay the same on the retry.
+                result["note"] = ("The values you passed do not match the company's records. Look them up with the tools "
+                                  "and call again with those exact values, or explain the problem to the user.")
 
         result, masked = mask_result(result, name, p.data, self.ledger)
         if masked:
@@ -357,12 +391,13 @@ class Gate:
             if rs.withheld:
                 verdict.decision = decision = Decision.BLOCK
                 self.ledger.facts["blocked"] += 1
+        laps.lap("screen")
         text = json.dumps(result, default=str)
         self.ledger.index(text, f"tool {name}")
         for sig in self.feed.match(scan_text(text), "tool_result"):
             self.ledger.warnings.append(f"{sig.id} in {name} result")
             log.warn(f"{name} result matches {sig.id} {sig.name} (untrusted content; agent may be steered)")
-        self._record(verdict, args, t0, screen=screened)
+        self._record(verdict, args, t0, screen=screened, laps=laps)
         return self.vault.tokenize(result) if self._external(provider) else result
 
     def _query(self, args: dict, p, findings: list[Finding]) -> object:
@@ -421,24 +456,30 @@ class Gate:
         if name == "send_email":
             f["emails_sent"] += 1
 
-    def _record(self, v: Verdict, args: dict, t0: float, quiet: bool = False, screen: dict | None = None) -> None:
+    def _record(self, v: Verdict, args: dict, t0: float, quiet: bool = False, screen: dict | None = None,
+                laps: _Laps | None = None) -> None:
         v.latency_ms = (time.perf_counter() - t0) * 1000
         judge_ms = (v.judge["ms"] if v.judge else 0.0) + (screen["ms"] if screen and screen["model_calls"] else 0.0)
         self.timings.append({"tool": v.effect.tool, "decision": v.decision.value,
                              "gate_ms": round(v.latency_ms - judge_ms, 3), "judge_ms": round(judge_ms, 1)})
+        stages = dict(laps.ms) if laps else {}
+        tw = time.perf_counter()
         self.audit.write({
-            "session": self.ledger.session_id, "tool": v.effect.tool, "kind": v.effect.kind, "decision": v.decision.value,
+            "session": self.ledger.session_id, "agent_model": self.agent_model, "caller": getattr(self, "caller", self.agent_id),
+            "acting_for": self.acting_for, "tool": v.effect.tool, "kind": v.effect.kind, "decision": v.decision.value,
             "effect": v.effect.summary, "findings": [[f.control, f.decision.value, f.message] for f in v.findings],
             "judge": {k: v.judge[k] for k in ("decision", "quote", "quote_ok", "model") if k in v.judge} if v.judge else None,
             "policy_sha": self.store.sha, "feed_version": self.feed.version, "latency_ms": round(v.latency_ms, 2),
-            "args_keys": sorted(args or {}),
+            "args_keys": sorted(args or {}), "stages_ms": stages,
         })
+        stages["record"] = round((time.perf_counter() - tw) * 1000, 3)
         self._emit({"kind": "decision", "caller": getattr(self, "caller", self.agent_id), "tool": v.effect.tool, "decision": "off" if quiet else v.decision.value,
                     "effect": v.effect.summary, "reason": "" if quiet else v.reason,
                     "plain": v.effect.plain, "plain_reason": "" if quiet else v.plain_reason,
                     "findings": [[f.control, f.decision.value, f.message, f.deterministic, f.plain] for f in v.findings],
                     "judge": {k: v.judge[k] for k in ("decision", "quote", "quote_ok", "model", "reason") if k in v.judge} if v.judge else None,
-                    "gate_ms": round(v.latency_ms - judge_ms, 3), "judge_ms": round(judge_ms), "args": args, "screen": screen})
+                    "gate_ms": round(v.latency_ms - judge_ms, 3), "judge_ms": round(judge_ms), "args": args, "screen": screen,
+                    "stages_ms": stages})
         if quiet:
             log.passthrough(v.effect.tool, json.dumps(args, default=str)[:110])
             return

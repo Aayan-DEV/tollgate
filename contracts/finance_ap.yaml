@@ -27,10 +27,10 @@ pay_invoice:
     - {id: invoice_exists, type: present, path: invoice, decision: block,
        message: "invoice {args.invoice_id} does not exist; only pay invoices returned by list_open_invoices",
        plain: "There is no invoice {args.invoice_id}."}
-    - {id: known_vendor, type: present, path: vendor, decision: block,
+    - {id: known_vendor, fixable: true, type: present, path: vendor, decision: block,
        message: "payee {args.vendor_id} is not in the vendor master data",
        plain: "{args.vendor_id} is not one of our suppliers."}
-    - {id: invoice_vendor, type: equals, left: invoice.vendor_id, right: args.vendor_id, decision: block,
+    - {id: invoice_vendor, fixable: true, type: equals, left: invoice.vendor_id, right: args.vendor_id, decision: block,
        message: "invoice belongs to vendor {invoice.vendor_id}, not {args.vendor_id}",
        plain: "This invoice belongs to a different supplier."}
     - {id: approved, type: equals, left: invoice.status, right: approved, decision: block,
@@ -39,7 +39,7 @@ pay_invoice:
     - {id: iban_on_file, type: same_iban, left: args.iban, right: vendor.iban, decision: block,
        message: "account is not the verified one on file ({vendor.iban}); bank details from documents are never used",
        plain: "The money would go to a bank account that is not the one we have on file for {vendor.name|args.vendor_id}. Changed bank details are a classic scam."}
-    - {id: exact_amount, type: number_equals, left: args.amount_eur, right: invoice.amount, tolerance: "@payments.amount_tolerance_eur",
+    - {id: exact_amount, fixable: true, type: number_equals, left: args.amount_eur, right: invoice.amount, tolerance: "@payments.amount_tolerance_eur",
        decision: block, message: "amount {args.amount_eur} EUR does not match the invoice total {invoice.amount} EUR",
        plain: "The amount ({args.amount_eur} EUR) does not match the invoice ({invoice.amount} EUR)."}
     - {id: not_paid, type: empty, path: paid, decision: block,

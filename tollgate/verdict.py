@@ -24,6 +24,7 @@ class Finding:
     message: str
     deterministic: bool = True
     plain: str = ""       # the same finding for someone outside finance and IT (shown first in the dashboard)
+    fixable: bool = False # a wrong value the agent passed, which it can look up and correct (never a policy limit)
 
 
 @dataclass
